@@ -1,12 +1,16 @@
 // apps/backend/src/app.ts
 import express from 'express';
+import cors from 'cors'; // 1. Import CORS
 
 const app = express();
 
-// Middleware to parse incoming JSON payloads automatically
+// 2. Allow your React frontend origin to safely talk to this API
+app.use(cors({
+  origin: 'http://localhost:5173' 
+}));
+
 app.use(express.json());
 
-// A simple status route to confirm server operation
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'RoleMatch API is running smoothly' });
 });
