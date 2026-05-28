@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Local Environment Secrets (Crucial for your AWS & OAuth tokens)
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+
+# System files
+.DS_Store
+.vscode/
+.idea/
+
+# Playwright logs and trace outputs
+test-results/
+playwright-report/
