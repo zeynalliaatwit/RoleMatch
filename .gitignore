@@ -1,20 +1,57 @@
-# Dependencies
+# ==========================================
+# Dependencies & Package Managers
+# ==========================================
 node_modules/
+/npm-debug.log*
+/yarn-error.log*
+/pnpm-debug.log*
 
-# Local Environment Secrets (Crucial for your AWS & OAuth tokens)
+# ==========================================
+# Local Environment Secrets (DO NOT COMMIT)
+# ==========================================
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
 
-# Build outputs
+# ==========================================
+# Build & Compilation Outputs
+# ==========================================
 dist/
 build/
+.next/
+out/
+bin/
+obj/
 
-# System files
-.DS_Store
-.vscode/
-.idea/
+# ==========================================
+# Database & Drizzle Specifics
+# ==========================================
+# NOTE: We COMMIT 'src/db/migrations' so the team stays synced.
+# We ignore Drizzle's local kit introspection snapshots or temp db files if any.
+.drizzle/
+*.db
+*.sqlite
 
-# Playwright logs and trace outputs
+# ==========================================
+# Web Automation & Testing (Playwright)
+# ==========================================
 test-results/
 playwright-report/
+blob-report/
+playwright/.local-browsers/
+
+# ==========================================
+# System, IDEs, and Editor Configurations
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
