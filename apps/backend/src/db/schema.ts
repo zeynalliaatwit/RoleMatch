@@ -4,7 +4,8 @@ import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  authProvider: varchar('auth_provider', { length: 50 }).notNull(),
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(), // <-- Add this
+  authProvider: varchar('auth_provider', { length: 50 }).notNull(), // e.g., 'local'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   lastLoginAt: timestamp('last_login_at'),
 });
@@ -30,4 +31,20 @@ export const applications = pgTable('applications', {
   status: varchar('status', { length: 50 }).default('submitted').notNull(), // e.g., submitted, interview, blocked
   submittedAt: timestamp('submitted_at').defaultNow(),
   evidenceNotes: text('evidence_notes'),
+});
+
+// 4. User Profiles Table (Instagram-style data)
+// 4. User Profiles Table (Instagram-style data)
+export const profiles = pgTable('profiles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  fullName: varchar('full_name', { length: 255 }).notNull(),
+  dateOfBirth: varchar('date_of_birth', { length: 50 }), // <-- Add this new field
+  major: varchar('major', { length: 255 }),
+  location: varchar('location', { length: 255 }),
+  bio: text('bio'),
+  skills: text('skills').array(),
+  preferredLocations: text('preferred_locations').array(),
+  salaryMinimum: varchar('salary_minimum', { length: 50 }),
+  portfolioLinks: text('portfolio_links').array(),
 });

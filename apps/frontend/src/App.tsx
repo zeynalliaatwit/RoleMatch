@@ -1,81 +1,98 @@
-// apps/frontend/src/App.tsx
-import { useEffect, useState } from 'react';
-import { Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { Home, User, Bookmark, Settings, LogOut } from 'lucide-react';
+import Profile from './Profile';
+import Auth from './Auth';
+import ProtectedRoute from './ProtectedRoute';
 
-interface HealthResponse {
-  status: string;
-  message: string;
-}
+// Shared styling for the sidebar links
+const navLinkStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    textDecoration: 'none',
+    color: '#000',
+    padding: '12px',
+    borderRadius: '8px',
+    transition: 'background-color 0.2s'
+};
 
 function App() {
-  const [data, setData] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    // Fetching from your Node.js backend server
-    fetch('http://localhost:5000/api/health')
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then((jsonData: HealthResponse) => {
-        setData(jsonData);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
+    // Clears the token and kicks the user back to the login screen
+    const handleLogout = () => {
+        localStorage.removeItem('rolematch_token');
+        window.location.href = '/auth'; // Force a full reload to clear any residual state
+    };
 
-  return (
-    <div style={{ 
-      fontFamily: 'sans-serif', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      height: '100vh', 
-      backgroundColor: '#f3f4f6' 
-    }}>
-      <div style={{ 
-        backgroundColor: '#ffffff', 
-        padding: '2.5rem', 
-        borderRadius: '12px', 
-        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-        textAlign: 'center',
-        maxWidth: '400px'
-      }}>
-        <h1 style={{ color: '#1f2937', marginBottom: '0.5rem' }}>RoleMatch</h1>
-        <p style={{ color: '#6b7280', marginBottom: '2rem' }}>Capstone Integration Testing Dashboard</p>
+    return (
+        <BrowserRouter>
+            <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: '#fafafa', fontFamily: 'sans-serif' }}>
 
-        {loading && (
-          <div style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <Activity className="animate-spin" /> Ping Server...
-          </div>
-        )}
+                {/* Left-Hand Navigation Sidebar */}
+                <nav style={{
+                    width: '244px',
+                    borderRight: '1px solid #dbdbdb',
+                    backgroundColor: '#fff',
+                    padding: '2rem 1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
+                }}>
+                    <h2 style={{ paddingLeft: '12px', marginBottom: '1.5rem', fontWeight: 'bold', fontSize: '1.5rem' }}>
+                        RoleMatch
+                    </h2>
 
-        {error && (
-          <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '1rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertCircle /> <strong>Connection Failure:</strong> {error}
-          </div>
-        )}
+                    <Link to="/" style={navLinkStyle}>
+                        <Home size={24} /> <span style={{ fontSize: '16px' }}>Dashboard</span>
+                    </Link>
+                    <Link to="/profile" style={navLinkStyle}>
+                        <User size={24} /> <span style={{ fontSize: '16px' }}>Profile</span>
+                    </Link>
+                    <Link to="/saved" style={navLinkStyle}>
+                        <Bookmark size={24} /> <span style={{ fontSize: '16px' }}>Saved Jobs</span>
+                    </Link>
 
-        {data && (
-          <div>
-            <div style={{ color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '1rem', fontSize: '1.25rem' }}>
-              <CheckCircle2 /> <strong>Status: {data.status.toUpperCase()}</strong>
+                    <div style={{ flexGrow: 1 }} /> {/* Pushes settings & logout to the bottom */}
+
+                    <Link to="/settings" style={navLinkStyle}>
+                        <Settings size={24} /> <span style={{ fontSize: '16px' }}>Settings</span>
+                    </Link>
+
+                    {/* Logout Button */}
+                    <button
+                        onClick={handleLogout}
+                        style={{ ...navLinkStyle, background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', color: '#ed4956' }}
+                    >
+                        <LogOut size={24} /> <span style={{ fontSize: '16px' }}>Log Out</span>
+                    </button>
+                </nav>
+
+                {/* Main Content Area */}
+                <main style={{ flex: 1, overflowY: 'auto' }}>
+                    <Routes>
+
+                        {/* Public Auth Route */}
+                        <Route path="/auth" element={<Auth />} />
+
+                        {/* Protected Routes Wrapper */}
+                        <Route element={<ProtectedRoute />}>
+
+                            <Route path="/" element={
+                                <div style={{ padding: '4rem', textAlign: 'center' }}>
+                                    <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>RoleMatch Dashboard</h1>
+                                    <p style={{ color: '#737373' }}>Welcome to your job application assistant.</p>
+                                </div>
+                            } />
+
+                            <Route path="/profile" element={<Profile />} />
+
+                        </Route>
+
+                    </Routes>
+                </main>
             </div>
-            <p style={{ backgroundColor: '#f0fdf4', color: '#166534', padding: '1rem', borderRadius: '8px', margin: 0 }}>
-              {data.message}
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+        </BrowserRouter>
+    );
 }
 
 export default App;
