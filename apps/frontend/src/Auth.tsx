@@ -34,7 +34,7 @@ export default function Auth() {
 
             const data = await response.json();
 
-            if (!response.ok) throw new Error(data.error);
+            if (!response.ok) throw new Error(data.error || 'Unable to complete request.');
 
             if (isLogin) {
                 localStorage.setItem('rolematch_token', data.token);
@@ -45,8 +45,8 @@ export default function Auth() {
                 setFirstName(''); setLastName(''); setDob(''); setPassword('');
                 alert("Registration successful! Please log in.");
             }
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Unable to complete request.');
         }
     };
 
@@ -120,7 +120,7 @@ export default function Auth() {
                             style={inputStyle}
                         />
 
-                        <button type="submit" style={{ marginTop: '10px', padding: '8px', backgroundColor: '#0095f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
+                        <button type="submit" style={{ marginTop: '10px', padding: '8px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
                             {isLogin ? 'Log in' : 'Sign up'}
                         </button>
                     </form>
@@ -136,7 +136,7 @@ export default function Auth() {
                             setIsLogin(!isLogin);
                             setError('');
                         }}
-                        style={{ color: '#0095f6', fontWeight: '600', cursor: 'pointer' }}
+                        style={{ color: '#2563eb', fontWeight: '600', cursor: 'pointer' }}
                     >
             {isLogin ? 'Sign up' : 'Log in'}
           </span>
