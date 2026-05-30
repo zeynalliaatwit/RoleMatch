@@ -4,9 +4,18 @@ import type { JobListing } from '../data/mockData';
 interface JobCardProps {
   job: JobListing;
   compact?: boolean;
+  onPrimaryAction?: (job: JobListing) => void;
+  onToggleSaved?: (jobId: string) => void;
+  primaryActionLabel?: string;
 }
 
-export function JobCard({ job, compact = false }: JobCardProps) {
+export function JobCard({
+  job,
+  compact = false,
+  onPrimaryAction,
+  onToggleSaved,
+  primaryActionLabel = 'Track application',
+}: JobCardProps) {
   return (
     <article className={`job-card${compact ? ' compact' : ''}`}>
       <div className="job-card-main">
@@ -46,12 +55,18 @@ export function JobCard({ job, compact = false }: JobCardProps) {
       <div className="job-card-footer">
         <span>{job.salary}</span>
         <div className="button-row">
-          <button className="icon-button" type="button" aria-label={job.saved ? 'Saved' : 'Save job'} title={job.saved ? 'Saved' : 'Save job'}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={job.saved ? 'Remove saved job' : 'Save job'}
+            title={job.saved ? 'Remove saved job' : 'Save job'}
+            onClick={() => onToggleSaved?.(job.id)}
+          >
             <Bookmark size={17} fill={job.saved ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
-          <button className="button secondary" type="button">
+          <button className="button secondary" type="button" onClick={() => onPrimaryAction?.(job)}>
             <ExternalLink size={16} aria-hidden="true" />
-            Start draft
+            {primaryActionLabel}
           </button>
         </div>
       </div>

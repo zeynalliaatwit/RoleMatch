@@ -1,33 +1,61 @@
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { applications, type ApplicationStatus } from '../data/mockData';
+import { useSearchParams } from 'react-router-dom';
+import { applications } from '../data/mockData';
 import { StatusBadge } from '../components/StatusBadge';
 
-const statusFilters: Array<ApplicationStatus | 'all'> = ['all', 'saved', 'draft', 'submitted', 'interview', 'blocked', 'rejected'];
+type TrackerFilter = 'all' | 'blocked' | 'interview' | 'rejected' | 'submitted';
+
+const trackerFilters: Array<{ label: string; value: TrackerFilter }> = [
+  { label: 'All', value: 'all' },
+  { label: 'Submitted', value: 'submitted' },
+  { label: 'Interviews', value: 'interview' },
+  { label: 'Blocked', value: 'blocked' },
+  { label: 'Rejected', value: 'rejected' },
+];
+
+function isTrackerFilter(value: string | null): value is TrackerFilter {
+  return trackerFilters.some((filter) => filter.value === value);
+}
 
 export function ApplicationsPage() {
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<ApplicationStatus | 'all'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedFilter = isTrackerFilter(searchParams.get('filter')) ? searchParams.get('filter') : 'all';
 
   const filteredApplications = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return applications.filter((application) => {
-      const matchesStatus = status === 'all' || application.status === status;
+      const matchesStatus = selectedFilter === 'all'
+        || (selectedFilter === 'interview' && application.stage === 'Interview')
+        || (selectedFilter !== 'interview' && application.status === selectedFilter);
       const matchesQuery = !normalizedQuery
         || [application.title, application.company, application.source, application.nextStep].some((value) => value.toLowerCase().includes(normalizedQuery));
 
       return matchesStatus && matchesQuery;
     });
-  }, [query, status]);
+  }, [query, selectedFilter]);
+
+  const handleFilterChange = (filter: TrackerFilter) => {
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (filter === 'all') {
+      nextParams.delete('filter');
+    } else {
+      nextParams.set('filter', filter);
+    }
+
+    setSearchParams(nextParams);
+  };
 
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <span className="eyebrow">Tracker</span>
-          <h1>Applications</h1>
-          <p>{filteredApplications.length} records in the current workspace</p>
+          <h1>Application tracker</h1>
+          <p>{filteredApplications.length} tracked applications in the current workspace</p>
         </div>
       </header>
 
@@ -42,14 +70,14 @@ export function ApplicationsPage() {
           />
         </label>
         <div className="segmented-control" role="group" aria-label="Filter by status">
-          {statusFilters.map((filter) => (
+          {trackerFilters.map((filter) => (
             <button
-              className={status === filter ? 'active' : ''}
-              key={filter}
+              className={selectedFilter === filter.value ? 'active' : ''}
+              key={filter.value}
               type="button"
-              onClick={() => setStatus(filter)}
+              onClick={() => handleFilterChange(filter.value)}
             >
-              {filter === 'all' ? 'All' : filter[0].toUpperCase() + filter.slice(1)}
+              {filter.label}
             </button>
           ))}
         </div>
@@ -60,9 +88,9 @@ export function ApplicationsPage() {
           <div className="table-row table-head">
             <span>Role</span>
             <span>Source</span>
-            <span>Status</span>
+            <span>Progress</span>
             <span>Match</span>
-            <span>Last update</span>
+            <span>Submitted</span>
             <span>Next step</span>
           </div>
           {filteredApplications.map((application) => (
@@ -72,9 +100,9 @@ export function ApplicationsPage() {
                 <span>{application.company}</span>
               </div>
               <span>{application.source}</span>
-              <StatusBadge status={application.status} />
+              <StatusBadge status={application.status} stage={application.stage} />
               <span>{application.fitScore}%</span>
-              <span>{application.lastUpdate}</span>
+              <span>{application.submittedDate}</span>
               <div>
                 <span>{application.nextStep}</span>
                 {application.blocker && <small>{application.blocker}</small>}

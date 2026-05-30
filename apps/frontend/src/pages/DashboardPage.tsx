@@ -1,37 +1,39 @@
-import { Bookmark, CheckCircle2, Clock3, FileWarning, Send } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { applications, jobs, userProfile } from '../data/mockData';
+import { Bookmark, CheckCircle2, Clock3, FileWarning, Search } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { applications, userProfile } from '../data/mockData';
 import { JobCard } from '../components/JobCard';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
+import { useSavedJobs } from '../hooks/useSavedJobs';
 
 export function DashboardPage() {
-  const savedJobs = jobs.filter((job) => job.saved);
-  const activeApplications = applications.filter((application) => !['rejected', 'saved'].includes(application.status));
-  const interviews = applications.filter((application) => application.status === 'interview');
+  const navigate = useNavigate();
+  const { jobsWithSavedState, savedJobs, toggleSavedJob } = useSavedJobs();
+  const submittedApplications = applications.filter((application) => application.status === 'submitted');
+  const interviews = applications.filter((application) => application.stage === 'Interview');
   const blockedApplications = applications.filter((application) => application.status === 'blocked');
-  const topMatches = jobs.slice(0, 3);
-  const recentApplications = applications.slice(0, 4);
+  const topMatches = jobsWithSavedState.slice(0, 3);
+  const recentApplications = applications.filter((application) => application.status !== 'rejected').slice(0, 4);
 
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <span className="eyebrow">Home</span>
-          <h1>Job search workspace</h1>
+          <h1>RoleMatch workspace</h1>
           <p>{userProfile.targetRoles.join(', ')} - {userProfile.targetLocation}</p>
         </div>
-        <button className="button primary" type="button">
-          <Send size={16} aria-hidden="true" />
-          New application
+        <button className="button primary" type="button" onClick={() => navigate('/jobs')}>
+          <Search size={16} aria-hidden="true" />
+          Search jobs
         </button>
       </header>
 
       <section className="stat-grid" aria-label="Application summary">
-        <StatCard icon={CheckCircle2} label="Active applications" value={String(activeApplications.length)} detail="Drafts, submitted, and interviews" />
-        <StatCard icon={Bookmark} label="Saved jobs" value={String(savedJobs.length)} detail="Ready for review" />
-        <StatCard icon={Clock3} label="Interviews" value={String(interviews.length)} detail="Upcoming or in progress" />
-        <StatCard icon={FileWarning} label="Blocked items" value={String(blockedApplications.length)} detail="Need manual attention" />
+        <StatCard icon={CheckCircle2} label="Submitted applications" value={String(submittedApplications.length)} detail="Applications sent or in progress after submission" to="/applications?filter=submitted" />
+        <StatCard icon={Clock3} label="Interviews" value={String(interviews.length)} detail="Submitted applications with interview activity" to="/applications?filter=interview" />
+        <StatCard icon={FileWarning} label="Blocked applications" value={String(blockedApplications.length)} detail="Need manual completion before submission" to="/applications?filter=blocked" />
+        <StatCard icon={Bookmark} label="Saved jobs" value={String(savedJobs.length)} detail="Roles saved but not yet applied to" to="/saved" />
       </section>
 
       <div className="dashboard-grid">
@@ -45,7 +47,14 @@ export function DashboardPage() {
           </div>
           <div className="stack">
             {topMatches.map((job) => (
-              <JobCard key={job.id} job={job} compact />
+              <JobCard
+                key={job.id}
+                job={job}
+                compact
+                onPrimaryAction={() => navigate('/jobs')}
+                onToggleSaved={toggleSavedJob}
+                primaryActionLabel="Open search"
+              />
             ))}
           </div>
         </section>
@@ -54,9 +63,8 @@ export function DashboardPage() {
           <div className="panel-header">
             <div>
               <span className="eyebrow">Tracker</span>
-              <h2>Recent applications</h2>
+              <h2>Application tracker snapshot</h2>
             </div>
-            <Link className="text-link" to="/applications">Open tracker</Link>
           </div>
           <div className="compact-list">
             {recentApplications.map((application) => (
@@ -65,7 +73,7 @@ export function DashboardPage() {
                   <strong>{application.title}</strong>
                   <span>{application.company} - {application.source}</span>
                 </div>
-                <StatusBadge status={application.status} />
+                <StatusBadge status={application.status} stage={application.stage} />
               </article>
             ))}
           </div>
