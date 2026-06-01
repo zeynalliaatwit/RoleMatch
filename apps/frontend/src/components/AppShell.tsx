@@ -5,8 +5,8 @@ import { userProfile } from '../data/mockData';
 const navItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/jobs', label: 'Job search', icon: Search },
+  { to: '/applications', label: 'Application tracker', icon: ClipboardList },
   { to: '/saved', label: 'Saved jobs', icon: Bookmark },
-  { to: '/applications', label: 'Applications', icon: ClipboardList },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 

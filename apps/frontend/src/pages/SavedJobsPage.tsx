@@ -1,10 +1,50 @@
 import { BookmarkCheck, CalendarClock, SlidersHorizontal } from 'lucide-react';
-import { jobs } from '../data/mockData';
 import { JobCard } from '../components/JobCard';
+import { useSavedJobs } from '../hooks/useSavedJobs';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+type SavedJobSort = 'company' | 'location' | 'match' | 'position' | 'salary';
+
+function salaryMidpoint(salary: string) {
+  const values = salary.match(/\d+/g)?.map(Number) ?? [];
+
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
 
 export function SavedJobsPage() {
-  const savedJobs = jobs.filter((job) => job.saved);
-  const averageMatch = Math.round(savedJobs.reduce((total, job) => total + job.matchScore, 0) / savedJobs.length);
+  const navigate = useNavigate();
+  const [sortMode, setSortMode] = useState<SavedJobSort>('match');
+  const { savedJobs, toggleSavedJob } = useSavedJobs();
+  const averageMatch = savedJobs.length
+    ? Math.round(savedJobs.reduce((total, job) => total + job.matchScore, 0) / savedJobs.length)
+    : 0;
+
+  const sortedSavedJobs = useMemo(() => {
+    return [...savedJobs].sort((firstJob, secondJob) => {
+      if (sortMode === 'match') {
+        return secondJob.matchScore - firstJob.matchScore;
+      }
+
+      if (sortMode === 'salary') {
+        return salaryMidpoint(secondJob.salary) - salaryMidpoint(firstJob.salary);
+      }
+
+      if (sortMode === 'location') {
+        return firstJob.location.localeCompare(secondJob.location);
+      }
+
+      if (sortMode === 'company') {
+        return firstJob.company.localeCompare(secondJob.company);
+      }
+
+      return firstJob.title.localeCompare(secondJob.title);
+    });
+  }, [savedJobs, sortMode]);
 
   return (
     <div className="page">
@@ -14,10 +54,17 @@ export function SavedJobsPage() {
           <h1>Saved jobs</h1>
           <p>{savedJobs.length} roles queued for resume tailoring and application review</p>
         </div>
-        <button className="button secondary" type="button">
+        <label className="sort-control">
           <SlidersHorizontal size={16} aria-hidden="true" />
-          Sort
-        </button>
+          <span>Sort</span>
+          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SavedJobSort)}>
+            <option value="match">Percent match</option>
+            <option value="salary">Salary range</option>
+            <option value="location">Location</option>
+            <option value="position">Position</option>
+            <option value="company">Company</option>
+          </select>
+        </label>
       </header>
 
       <section className="summary-strip" aria-label="Saved job summary">
@@ -32,9 +79,20 @@ export function SavedJobsPage() {
       </section>
 
       <section className="job-grid" aria-label="Saved job list">
-        {savedJobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+        {sortedSavedJobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            onToggleSaved={toggleSavedJob}
+            onPrimaryAction={() => navigate('/applications?filter=submitted')}
+          />
         ))}
+        {savedJobs.length === 0 && (
+          <div className="empty-state">
+            <h2>No saved jobs</h2>
+            <p>Save roles from job search to review them here before applying.</p>
+          </div>
+        )}
       </section>
     </div>
   );
