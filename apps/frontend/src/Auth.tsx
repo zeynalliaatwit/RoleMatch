@@ -51,7 +51,15 @@ export default function Auth() {
     };
 
     // Shared input styling
-    const inputStyle = { padding: '9px 8px', backgroundColor: '#fafafa', border: '1px solid #dbdbdb', borderRadius: '3px', fontSize: '14px', width: '100%', boxSizing: 'border-box' as const };
+    const inputStyle = { 
+        padding: '9px 8px', 
+        backgroundColor: '#fafafa', 
+        border: '1px solid #dbdbdb', 
+        borderRadius: '3px', 
+        fontSize: '14px', 
+        width: '100%', 
+        boxSizing: 'border-box' as const 
+    };
 
     return (
         <div style={{ display: 'flex', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fafafa' }}>
@@ -138,10 +146,9 @@ export default function Auth() {
                         }}
                         style={{ color: '#2563eb', fontWeight: '600', cursor: 'pointer' }}
                     >
-            {isLogin ? 'Sign up' : 'Log in'}
-          </span>
+                    {isLogin ? 'Sign up' : 'Log in'}
+                    </span>
                 </div>
-
             </div>
         </div>
     );
