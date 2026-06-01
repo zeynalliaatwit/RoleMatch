@@ -34,7 +34,6 @@ export const applications = pgTable('applications', {
 });
 
 // 4. User Profiles Table (Instagram-style data)
-// 4. User Profiles Table (Instagram-style data)
 export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
