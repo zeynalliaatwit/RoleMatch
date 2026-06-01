@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, date } from 'drizzle-orm/pg-core';
 
 // 1. Users Identity Table (Matches Auth Design)
 export const users = pgTable('users', {
@@ -38,7 +38,7 @@ export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   fullName: varchar('full_name', { length: 255 }).notNull(),
-  dateOfBirth: varchar('date_of_birth', { length: 50 }), // <-- Add this new field
+  dateOfBirth: date('date_of_birth', { mode: "string" }), // <-- Add this new field
   major: varchar('major', { length: 255 }),
   location: varchar('location', { length: 255 }),
   bio: text('bio'),
