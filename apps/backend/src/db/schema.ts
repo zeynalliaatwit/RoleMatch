@@ -4,8 +4,8 @@ import { pgTable, uuid, varchar, text, timestamp, date } from 'drizzle-orm/pg-co
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  passwordHash: varchar('password_hash', { length: 255 }).notNull(), // <-- Add this
-  authProvider: varchar('auth_provider', { length: 50 }).notNull(), // e.g., 'local'
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  authProvider: varchar('auth_provider', { length: 50 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   lastLoginAt: timestamp('last_login_at'),
 });
@@ -38,9 +38,21 @@ export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   fullName: varchar('full_name', { length: 255 }).notNull(),
-  dateOfBirth: date('date_of_birth', { mode: "string" }), // <-- Add this new field
-  major: varchar('major', { length: 255 }),
+  dateOfBirth: date('date_of_birth'),
   location: varchar('location', { length: 255 }),
+  education: text('education'),
+  workExperience: text('work_experience'),
+  linkedinUrl: text('linkedin_url'),
+  githubUrl: text('github_url'),
+  gender: varchar('gender', { length: 50 }),
+  race: varchar('race', { length: 100 }),
+  veteranStatus: varchar('veteran_status', { length: 100 }),
+  disabilityStatus: varchar('disability_status', { length: 100 }),
+  workAuthorization: text('work_authorization'),
+  resumeUrl: text('resume_url'),
+
+  // Existing system fields
+  major: varchar('major', { length: 255 }),
   bio: text('bio'),
   skills: text('skills').array(),
   preferredLocations: text('preferred_locations').array(),

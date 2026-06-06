@@ -6,6 +6,9 @@ import { profiles, users } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 
@@ -20,28 +23,32 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'RoleMatch API is running smoothly' });
 });
 
+// GET /api/profile
 app.get('/api/profile', async (req, res) => {
   try {
-    // For MVP testing, we'll just grab the very first profile in the database.
-    // Later, you will filter this by the authenticated user's ID: eq(profiles.userId, req.user.id)
-    const allProfiles = await db.select().from(profiles).limit(1);
+    // 1. Verify the user's token
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
 
-    if (allProfiles.length === 0) {
-      // Fallback mock data if the database is empty so your frontend doesn't break
-      return res.json({
-        fullName: "Alex Jobseeker",
-        major: "B.S. Computer Science",
-        location: "Boston, MA",
-        bio: "Full-stack developer passionate about building intuitive web applications.",
-        skills: ["React", "TypeScript", "Node.js", "PostgreSQL"],
-        stats: { applications: 12, saved: 8, interviews: 2 }
-      });
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: "Malformed authorization token." });
+
+    const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+
+    // 2. Fetch the specific user's profile from the database
+    const userProfiles = await db.select()
+        .from(profiles)
+        .where(eq(profiles.userId, decoded.userId as string))
+        .limit(1);
+
+    if (userProfiles.length === 0) {
+      return res.status(404).json({ error: "Profile not found." });
     }
 
-    // Send the real database data
+    // 3. Send the real database data
     res.json({
-      ...allProfiles[0],
-      stats: { applications: 0, saved: 0, interviews: 0 } // Hardcoded stats for now
+      ...userProfiles[0],
+      stats: { applications: 0, saved: 0, interviews: 0 } // You can wire these up to the real DB later
     });
   } catch (error) {
     console.error("Database error:", error);
@@ -54,33 +61,31 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-product
 // POST /api/auth/register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, dob } = req.body;
+    // 1. Removed 'dob'
+    const { email, password, firstName, lastName } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 1. Insert into the users table
     const newUserResult = await db.insert(users).values({
       email,
       passwordHash: hashedPassword,
       authProvider: 'local'
     }).returning();
 
-    // 2. Safely extract the first item and check it directly
     const createdUser = newUserResult[0];
-
-    // If it's undefined, kick out an error
     if (!createdUser) {
       return res.status(500).json({ error: "Failed to create user account." });
     }
 
-    // 3. Create the profile
-    // TypeScript now knows 'createdUser' is safely defined
+    // 2. Create the base profile
     await db.insert(profiles).values({
       userId: createdUser.id,
       fullName: `${firstName} ${lastName}`.trim(),
-      dateOfBirth: dob,
     });
 
-    res.status(201).json({ message: "User registered successfully!" });
+    // 3. Auto-generate token so they can proceed directly to onboarding
+    const token = jwt.sign({ userId: createdUser.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({ message: "User registered successfully!", token });
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({ error: "Registration failed. Email might already exist." });
@@ -89,28 +94,89 @@ app.post('/api/auth/register', async (req, res) => {
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
+  // ... (Keep your existing login code exactly as it is)
   try {
     const { email, password } = req.body;
-
-    // Find user
     const userResult = await db.select().from(users).where(eq(users.email, email));
-
-    // Safely assign the user and explicitly check for undefined to satisfy TypeScript
     const user = userResult[0];
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Check password
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Generate token (TypeScript now knows 'user' is 100% defined here)
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-
     res.json({ token, userId: user.id, email: user.email });
   } catch (error) {
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// PUT /api/profile/onboarding
+const uploadDir = 'uploads/resumes';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure how and where Multer saves the files
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Give the file a unique name to prevent overwriting
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// Tell Express to serve the 'uploads' folder statically so the frontend can access the files via URL
+app.use('/uploads', express.static('uploads'));
+
+app.put('/api/profile/onboarding', upload.single('resume'), async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+
+    const token = authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ error: "Malformed authorization token." });
+
+    const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+
+    // Multer places all the text fields back into req.body
+    const {
+      dob, education, location, workExperience, linkedinUrl, githubUrl,
+      gender, race, workAuthorization, veteranStatus, disabilityStatus
+    } = req.body;
+
+    // Multer places the file information into req.file
+    // If a file was uploaded, construct the URL path to save in the DB
+    const resumeUrl = req.file ? `/uploads/resumes/${req.file.filename}` : null;
+
+    // Update the profiles table
+    await db.update(profiles)
+        .set({
+          dateOfBirth: dob ? (new Date(dob).toISOString().split('T')[0] || null) : null,
+          location: location || null,
+          education: education || null,
+          workExperience: workExperience || null,
+          linkedinUrl: linkedinUrl || null,
+          githubUrl: githubUrl || null,
+          gender: gender || null,
+          race: race || null,
+          workAuthorization: workAuthorization || null,
+          veteranStatus: veteranStatus || null,
+          disabilityStatus: disabilityStatus || null,
+          // Save the file path to the database
+          resumeUrl: resumeUrl
+        })
+        .where(eq(profiles.userId, decoded.userId as string));
+
+    res.json({ message: "Profile onboarded successfully!", resumeUrl });
+  } catch (error) {
+    console.error("Onboarding error:", error);
+    res.status(500).json({ error: "Failed to save profile preferences." });
   }
 });
 

@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1779986034568,
-      "tag": "0000_tricky_klaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1779997108303,
-      "tag": "0001_mushy_zarda",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1779998172662,
-      "tag": "0002_lyrical_mastermind",
+      "when": 1780779579633,
+      "tag": "0000_gifted_abomination",
       "breakpoints": true
     }
   ]

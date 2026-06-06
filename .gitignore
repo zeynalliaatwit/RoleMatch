@@ -57,3 +57,5 @@ Thumbs.db
 *.swp
 
 bundle_context.py
+
+merge.py
