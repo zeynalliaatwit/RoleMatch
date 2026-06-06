@@ -59,3 +59,5 @@ Thumbs.db
 bundle_context.py
 
 merge.py
+
+apps/backend/uploads/
