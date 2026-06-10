@@ -1,17 +1,44 @@
-import { Bookmark, CheckCircle2, Clock3, FileWarning, Send } from 'lucide-react';
+import { Bookmark, CheckCircle2, Clock3, FileWarning, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { applications, jobs, userProfile } from '../data/mockData';
+import { useEffect, useMemo, useState } from 'react';
+import { getApplications, type ApiApplication } from '../api/applications';
+import { getSavedJobs, searchJobs, type ApiJob } from '../api/jobs';
 import { JobCard } from '../components/JobCard';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function DashboardPage() {
-  const savedJobs = jobs.filter((job) => job.saved);
-  const activeApplications = applications.filter((application) => !['rejected', 'saved'].includes(application.status));
-  const interviews = applications.filter((application) => application.status === 'interview');
-  const blockedApplications = applications.filter((application) => application.status === 'blocked');
-  const topMatches = jobs.slice(0, 3);
+  const [applications, setApplications] = useState<ApiApplication[]>([]);
+  const [savedJobs, setSavedJobs] = useState<ApiJob[]>([]);
+  const [topMatches, setTopMatches] = useState<ApiJob[]>([]);
+  const [dataError, setDataError] = useState('');
+
+  const submittedApplications = useMemo(() => applications.filter((application) => application.status === 'submitted'), [applications]);
+  const interviews = useMemo(() => applications.filter((application) => application.status === 'interview'), [applications]);
+  const blockedApplications = useMemo(() => applications.filter((application) => application.status === 'blocked'), [applications]);
   const recentApplications = applications.slice(0, 4);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setDataError('');
+
+      try {
+        const [applicationRows, saved, matches] = await Promise.all([
+          getApplications(),
+          getSavedJobs(),
+          searchJobs({ query: 'software engineer', limit: 3 }),
+        ]);
+
+        setApplications(applicationRows);
+        setSavedJobs(saved);
+        setTopMatches(matches.jobs.slice(0, 3));
+      } catch (err: unknown) {
+        setDataError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
+      }
+    };
+
+    void loadDashboardData();
+  }, []);
 
   return (
     <div className="page">
@@ -19,20 +46,30 @@ export function DashboardPage() {
         <div>
           <span className="eyebrow">Home</span>
           <h1>Job search workspace</h1>
-          <p>{userProfile.targetRoles.join(', ')} - {userProfile.targetLocation}</p>
+          <p>Search roles, save targets, and track submitted applications from one workspace.</p>
         </div>
-        <button className="button primary" type="button">
-          <Send size={16} aria-hidden="true" />
-          New application
-        </button>
+        <Link className="button primary" to="/jobs">
+          <Search size={16} aria-hidden="true" />
+          Search jobs
+        </Link>
       </header>
 
       <section className="stat-grid" aria-label="Application summary">
-        <StatCard icon={CheckCircle2} label="Active applications" value={String(activeApplications.length)} detail="Drafts, submitted, and interviews" />
-        <StatCard icon={Bookmark} label="Saved jobs" value={String(savedJobs.length)} detail="Ready for review" />
-        <StatCard icon={Clock3} label="Interviews" value={String(interviews.length)} detail="Upcoming or in progress" />
-        <StatCard icon={FileWarning} label="Blocked items" value={String(blockedApplications.length)} detail="Need manual attention" />
+        <Link className="stat-link" to="/applications?status=submitted">
+          <StatCard icon={CheckCircle2} label="Submitted applications" value={String(submittedApplications.length)} detail="Applications already sent" />
+        </Link>
+        <Link className="stat-link" to="/applications?status=interview">
+          <StatCard icon={Clock3} label="Interviews" value={String(interviews.length)} detail="Submitted roles with interview activity" />
+        </Link>
+        <Link className="stat-link" to="/applications?status=blocked">
+          <StatCard icon={FileWarning} label="Blocked items" value={String(blockedApplications.length)} detail="Need manual attention" />
+        </Link>
+        <Link className="stat-link" to="/saved">
+          <StatCard icon={Bookmark} label="Saved jobs" value={String(savedJobs.length)} detail="Bookmarked roles not yet applied" />
+        </Link>
       </section>
+
+      {dataError && <div className="notice-banner">{dataError}</div>}
 
       <div className="dashboard-grid">
         <section className="panel">
@@ -47,6 +84,9 @@ export function DashboardPage() {
             {topMatches.map((job) => (
               <JobCard key={job.id} job={job} compact />
             ))}
+            {!dataError && topMatches.length === 0 && (
+              <p className="muted-copy">Search jobs to populate live matches from supported sources.</p>
+            )}
           </div>
         </section>
 
@@ -68,6 +108,9 @@ export function DashboardPage() {
                 <StatusBadge status={application.status} />
               </article>
             ))}
+            {recentApplications.length === 0 && (
+              <p className="muted-copy">No applications have been created yet.</p>
+            )}
           </div>
         </section>
       </div>

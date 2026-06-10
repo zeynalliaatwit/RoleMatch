@@ -1,6 +1,10 @@
 :root {
   --accent: #2563eb;
+  --accent-2: #0f766e;
+  --accent-3: #b45309;
   --accent-soft: #eff6ff;
+  --accent-2-soft: #ecfdf5;
+  --accent-3-soft: #fffbeb;
   --bg: #f6f7f9;
   --border: #d9dde3;
   --border-strong: #c4cad3;

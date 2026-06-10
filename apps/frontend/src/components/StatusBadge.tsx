@@ -1,12 +1,10 @@
-import type { ApplicationStatus } from '../data/mockData';
+import type { ApplicationStatus } from '../api/applications';
 
 const statusLabels: Record<ApplicationStatus, string> = {
   blocked: 'Blocked',
-  draft: 'Draft',
   interview: 'Interview',
   offer: 'Offer',
   rejected: 'Rejected',
-  saved: 'Saved',
   submitted: 'Submitted',
 };
 

@@ -1,17 +1,66 @@
 import { Bookmark, BriefcaseBusiness, ClipboardList, Home, LogOut, Search, User } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { userProfile } from '../data/mockData';
+import { useEffect, useMemo, useState } from 'react';
+import { API_BASE_URL } from '../api/client';
 
 const navItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/jobs', label: 'Job search', icon: Search },
+  { to: '/applications', label: 'Application tracker', icon: ClipboardList },
   { to: '/saved', label: 'Saved jobs', icon: Bookmark },
-  { to: '/applications', label: 'Applications', icon: ClipboardList },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 
+interface ShellProfile {
+  fullName: string;
+  education: string | null;
+  location: string | null;
+}
+
+function initialsFor(name: string) {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'RM';
+}
+
 export function AppShell() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState<ShellProfile | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('rolematch_token');
+    if (!token) return;
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          setProfile(await response.json() as ShellProfile);
+        }
+      } catch {
+        setProfile(null);
+      }
+    };
+
+    void loadProfile();
+  }, []);
+
+  const displayName = profile?.fullName?.trim() || 'RoleMatch user';
+  const subtitle = useMemo(() => {
+    if (profile?.education) return profile.education;
+    if (profile?.location) return profile.location;
+
+    return 'Profile setup';
+  }, [profile]);
 
   const handleLogout = () => {
     localStorage.removeItem('rolematch_token');
@@ -52,11 +101,11 @@ export function AppShell() {
         <div className="sidebar-footer">
           <div className="mini-profile">
             <div className="avatar" aria-hidden="true">
-              {userProfile.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+              {initialsFor(displayName)}
             </div>
             <div>
-              <strong>{userProfile.name}</strong>
-              <span>{userProfile.title}</span>
+              <strong>{displayName}</strong>
+              <span>{subtitle}</span>
             </div>
           </div>
           <button className="nav-link danger" type="button" onClick={handleLogout}>
