@@ -26,6 +26,7 @@ export interface ProviderStatus {
   provider: string;
   count: number;
   error?: string;
+  status?: 'pending' | 'complete' | 'error';
 }
 
 export interface JobSearchParams {
@@ -44,6 +45,14 @@ export interface JobSearchResponse {
   providerResults: ProviderStatus[];
 }
 
+export interface JobSearchStreamEvent {
+  type: 'provider-start' | 'provider-result' | 'local-cache' | 'done';
+  provider?: string;
+  jobs?: ApiJob[];
+  providerResult?: ProviderStatus;
+  total?: number;
+}
+
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {
   const query = buildQuery({ limit: 30, ...params });
   const response = await fetch(`${API_BASE_URL}/api/jobs/search?${query}`, {
@@ -51,6 +60,47 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResp
   });
 
   return readJson<JobSearchResponse>(response);
+}
+
+export async function streamJobs(
+  params: JobSearchParams,
+  onEvent: (event: JobSearchStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const query = buildQuery({ limit: 200, ...params });
+  const response = await fetch(`${API_BASE_URL}/api/jobs/search/stream?${query}`, {
+    headers: authHeaders(),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    await readJson(response);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() ?? '';
+
+    chunks.forEach((chunk) => {
+      const dataLine = chunk.split('\n').find((line) => line.startsWith('data: '));
+      if (!dataLine) return;
+
+      try {
+        onEvent(JSON.parse(dataLine.slice(6)) as JobSearchStreamEvent);
+      } catch {
+        // Ignore malformed stream chunks and continue reading later events.
+      }
+    });
+  }
 }
 
 export async function getSavedJobs(params: JobSearchParams = {}): Promise<ApiJob[]> {

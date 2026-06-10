@@ -205,6 +205,10 @@
   border-color: var(--border-strong);
 }
 
+.button.primary:hover {
+  background: #1d4ed8;
+}
+
 .button:disabled,
 .icon-button:disabled {
   cursor: not-allowed;
@@ -261,6 +265,18 @@
   gap: 12px;
   min-height: 118px;
   padding: 16px;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.stat-link:hover .stat-card,
+.job-card:hover,
+.panel:hover {
+  box-shadow: 0 14px 34px rgb(17 24 39 / 0.07);
+}
+
+.stat-link:hover .stat-card,
+.job-card:hover {
+  transform: translateY(-1px);
 }
 
 .stat-icon {
@@ -332,6 +348,7 @@
   display: grid;
   gap: 14px;
   padding: 18px;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .job-card.compact {
@@ -583,6 +600,20 @@ input[type="range"] {
   font-weight: 750;
 }
 
+.provider-pill.pending {
+  border-color: var(--accent-soft);
+  background: linear-gradient(90deg, var(--accent-soft), var(--surface), var(--accent-soft));
+  background-size: 220% 100%;
+  animation: provider-pulse 1.6s ease-in-out infinite;
+  color: var(--accent);
+}
+
+.provider-pill.complete {
+  border-color: var(--accent-2-soft);
+  background: var(--accent-2-soft);
+  color: var(--accent-2);
+}
+
 .provider-pill.warning {
   border-color: var(--warning-soft);
   background: var(--warning-soft);
@@ -756,6 +787,36 @@ input[type="range"] {
   justify-content: flex-start;
 }
 
+.profile-page {
+  width: min(1240px, 100%);
+}
+
+.profile-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgb(37 99 235 / 0.09), transparent 38%),
+    linear-gradient(90deg, var(--surface), #f8fafc);
+}
+
+.profile-hero::after {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  width: 230px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent);
+  content: "";
+}
+
+.profile-title {
+  min-width: 0;
+  flex: 1;
+}
+
 .profile-avatar {
   width: 86px;
   height: 86px;
@@ -763,6 +824,28 @@ input[type="range"] {
   border-radius: 8px;
   font-size: 1.4rem;
   font-weight: 800;
+}
+
+.profile-signal-card {
+  display: grid;
+  min-width: 132px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.78);
+}
+
+.profile-signal-card span,
+.profile-signal-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.profile-signal-card strong {
+  color: var(--text);
+  font-size: 2rem;
+  line-height: 1.05;
 }
 
 .profile-actions {
@@ -815,6 +898,77 @@ input[type="range"] {
   font-size: 0.84rem;
   font-weight: 700;
   text-decoration: none;
+}
+
+.profile-editor {
+  display: grid;
+  gap: 18px;
+}
+
+.editor-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.nested-section-header,
+.nested-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nested-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.nested-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.nested-editor strong {
+  color: var(--text);
+}
+
+.compact-actions {
+  margin-top: 0;
+}
+
+.inline-check {
+  align-self: end;
+}
+
+.document-upload {
+  display: grid;
+  grid-template-columns: 140px minmax(150px, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.document-upload input[type="file"] {
+  grid-column: 1 / -1;
+  padding: 7px;
+}
+
+.document-upload .button {
+  grid-column: 1 / -1;
+}
+
+@keyframes provider-pulse {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -881,6 +1035,10 @@ input[type="range"] {
   .form-grid {
     grid-template-columns: 1fr;
   }
+
+  .document-upload {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -891,6 +1049,10 @@ input[type="range"] {
   .tracker-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .profile-signal-card {
+    min-width: 0;
   }
 
   .page-header h1,

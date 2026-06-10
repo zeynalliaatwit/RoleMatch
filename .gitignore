@@ -61,3 +61,4 @@ bundle_context.py
 merge.py
 
 apps/backend/uploads/
+.codex-local-logs/

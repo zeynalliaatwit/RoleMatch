@@ -1,14 +1,14 @@
 import { Filter, Search } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { JobCard } from '../components/JobCard';
 import { createApplication } from '../api/applications';
-import { searchJobs, setJobSaved, type ApiJob, type JobSearchParams, type ProviderStatus } from '../api/jobs';
+import { setJobSaved, streamJobs, type ApiJob, type JobSearchParams, type ProviderStatus } from '../api/jobs';
 
-const sourceOptions = ['All sources', 'The Muse', 'Adzuna', 'Remotive', 'Arbeitnow', 'RemoteOK', 'Lever', 'Greenhouse', 'USAJOBS'];
+const sourceOptions = ['All sources', 'The Muse', 'Adzuna', 'Workday', 'Remotive', 'Arbeitnow', 'RemoteOK', 'Lever', 'Greenhouse', 'USAJOBS', 'Indeed', 'LinkedIn'];
 const employmentOptions = ['Any', 'Full time', 'Part time', 'Internship', 'Contract', 'Temporary'];
 const experienceOptions = ['Any', 'Internship', 'Entry level', 'Mid level', 'Senior', 'Leadership'];
-const limitOptions = [30, 75, 150, 200];
+const limitOptions = [200, 300, 400, 500];
 const salaryOptions = [
   { label: 'Any salary', value: 0 },
   { label: '$50,000+', value: 50000 },
@@ -25,7 +25,7 @@ export function JobSearchPage() {
   const [employmentType, setEmploymentType] = useState('Any');
   const [experienceLevel, setExperienceLevel] = useState('Any');
   const [minSalary, setMinSalary] = useState(0);
-  const [limit, setLimit] = useState(75);
+  const [limit, setLimit] = useState(200);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [jobs, setJobs] = useState<ApiJob[]>([]);
   const [providerResults, setProviderResults] = useState<ProviderStatus[]>([]);
@@ -34,31 +34,77 @@ export function JobSearchPage() {
   const [notice, setNotice] = useState('');
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
   const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const runSearch = useCallback(async (filters: JobSearchParams) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setError('');
     setNotice('');
+    setJobs([]);
+    setProviderResults([]);
 
     try {
-      const result = await searchJobs(filters);
-      setJobs(result.jobs);
-      setProviderResults(result.providerResults);
+      await streamJobs(filters, (event) => {
+        if (event.type === 'provider-start' && event.provider) {
+          setProviderResults((current) => {
+            const nextStatus: ProviderStatus = { provider: event.provider!, count: 0, status: 'pending' };
+            const exists = current.some((result) => result.provider === event.provider);
+            return exists
+              ? current.map((result) => result.provider === event.provider ? nextStatus : result)
+              : [...current, nextStatus];
+          });
+        }
+
+        if ((event.type === 'provider-result' || event.type === 'local-cache') && event.providerResult) {
+          setProviderResults((current) => {
+            const nextStatus: ProviderStatus = {
+              ...event.providerResult!,
+              status: event.providerResult!.error ? 'error' : 'complete',
+            };
+            const exists = current.some((result) => result.provider === nextStatus.provider);
+            return exists
+              ? current.map((result) => result.provider === nextStatus.provider ? nextStatus : result)
+              : [...current, nextStatus];
+          });
+        }
+
+        if (event.jobs && event.jobs.length > 0) {
+          setJobs((currentJobs) => {
+            const jobMap = new Map(currentJobs.map((job) => [job.id, job]));
+            event.jobs?.forEach((job) => jobMap.set(job.id, job));
+
+            return Array.from(jobMap.values())
+              .sort((first, second) => second.matchScore - first.matchScore)
+              .slice(0, filters.limit ?? 500);
+          });
+        }
+      }, controller.signal);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to search jobs.');
-      setJobs([]);
-      setProviderResults([]);
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setError(err instanceof Error ? err.message : 'Unable to search jobs.');
+        setJobs([]);
+        setProviderResults([]);
+      }
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) {
+        setLoading(false);
+        abortRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void runSearch({ query: 'software engineer', location: 'Boston', limit: 75 });
+      void runSearch({ query: 'software engineer', location: 'Boston', limit: 200 });
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      abortRef.current?.abort();
+    };
   }, [runSearch]);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -119,7 +165,7 @@ export function JobSearchPage() {
         <div>
           <span className="eyebrow">Job search</span>
           <h1>Job search</h1>
-          <p>{loading ? 'Searching supported sources...' : `${jobs.length} matching roles found`}</p>
+          <p>{loading ? `Streaming live results... ${jobs.length} roles found so far` : `${jobs.length} matching roles found`}</p>
         </div>
       </header>
 
@@ -203,8 +249,8 @@ export function JobSearchPage() {
       {providerResults.length > 0 && (
         <section className="provider-strip" aria-label="Provider status">
           {providerResults.map((result) => (
-            <span className={`provider-pill${result.error ? ' warning' : ''}`} key={result.provider} title={result.error ?? undefined}>
-              {result.provider}: {result.error ? 'unavailable' : `${result.count} roles`}
+            <span className={`provider-pill ${result.status ?? ''}${result.error ? ' warning' : ''}`} key={result.provider} title={result.error ?? undefined}>
+              {result.provider}: {result.status === 'pending' ? 'searching' : result.error ? 'unavailable' : `${result.count} roles`}
             </span>
           ))}
         </section>
@@ -212,7 +258,7 @@ export function JobSearchPage() {
 
       {unavailableProviders.length > 0 && (
         <div className="notice-banner">
-          Some optional sources need configuration or are temporarily unavailable. Results from working sources are still shown.
+          Some sources require partner credentials, configured ATS boards, or explicit permission. Results from working live sources continue streaming in.
         </div>
       )}
 

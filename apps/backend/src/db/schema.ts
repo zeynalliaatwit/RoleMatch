@@ -1,4 +1,59 @@
-import { boolean, integer, pgTable, uniqueIndex, uuid, varchar, text, timestamp, date } from 'drizzle-orm/pg-core';
+import { boolean, integer, jsonb, pgTable, uniqueIndex, uuid, varchar, text, timestamp, date } from 'drizzle-orm/pg-core';
+
+export interface EducationEntry {
+  school: string;
+  degree: string;
+  field: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  gpa?: string;
+  notes?: string;
+  courses?: string[];
+}
+
+export interface WorkHistoryEntry {
+  company: string;
+  title: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  current?: boolean;
+  highlights?: string[];
+  skills?: string[];
+}
+
+export interface ProjectEntry {
+  name: string;
+  role?: string;
+  url?: string;
+  description?: string;
+  technologies?: string[];
+}
+
+export interface CertificationEntry {
+  name: string;
+  issuer?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+}
+
+export interface AutofillAnswers {
+  authorizedToWork?: string;
+  sponsorshipRequired?: string;
+  veteranStatus?: string;
+  disabilityStatus?: string;
+  gender?: string;
+  race?: string;
+  yearsProfessionalExperience?: string;
+  yearsSoftwareExperience?: string;
+  yearsReactExperience?: string;
+  yearsNodeExperience?: string;
+  yearsPythonExperience?: string;
+  willingToRelocate?: string;
+  desiredSalary?: string;
+  earliestStartDate?: string;
+}
 
 // 1. Users Identity Table (Matches Auth Design)
 export const users = pgTable('users', {
@@ -64,11 +119,14 @@ export const profiles = pgTable('profiles', {
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   fullName: varchar('full_name', { length: 255 }).notNull(),
   dateOfBirth: date('date_of_birth'),
+  phone: varchar('phone', { length: 100 }),
   location: varchar('location', { length: 255 }),
   education: text('education'),
   workExperience: text('work_experience'),
   linkedinUrl: text('linkedin_url'),
   githubUrl: text('github_url'),
+  portfolioUrl: text('portfolio_url'),
+  indeedUrl: text('indeed_url'),
   gender: varchar('gender', { length: 50 }),
   race: varchar('race', { length: 100 }),
   veteranStatus: varchar('veteran_status', { length: 100 }),
@@ -80,7 +138,25 @@ export const profiles = pgTable('profiles', {
   major: varchar('major', { length: 255 }),
   bio: text('bio'),
   skills: text('skills').array(),
+  targetRoles: text('target_roles').array(),
+  relevantCourses: text('relevant_courses').array(),
   preferredLocations: text('preferred_locations').array(),
   salaryMinimum: varchar('salary_minimum', { length: 50 }),
   portfolioLinks: text('portfolio_links').array(),
+  educationHistory: jsonb('education_history').$type<EducationEntry[]>(),
+  workHistory: jsonb('work_history').$type<WorkHistoryEntry[]>(),
+  projectHistory: jsonb('project_history').$type<ProjectEntry[]>(),
+  certifications: jsonb('certifications').$type<CertificationEntry[]>(),
+  autofillAnswers: jsonb('autofill_answers').$type<AutofillAnswers>(),
+});
+
+export const profileDocuments = pgTable('profile_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  label: varchar('label', { length: 255 }).notNull(),
+  documentType: varchar('document_type', { length: 80 }).notNull(),
+  fileName: varchar('file_name', { length: 255 }).notNull(),
+  fileUrl: text('file_url').notNull(),
+  mimeType: varchar('mime_type', { length: 150 }),
+  uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
 });

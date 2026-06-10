@@ -2,7 +2,7 @@ import { and, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { jobPostings, savedJobs } from '../db/schema.js';
 import { calculateMatchScore, truncate } from './normalization.js';
-import { getConfiguredProviders } from './providers.js';
+import { getSearchProviders } from './providers.js';
 import type { JobProviderResult, JobSearchFilters, NormalizedJob } from './types.js';
 
 type JobPostingRow = typeof jobPostings.$inferSelect;
@@ -119,6 +119,23 @@ async function getSavedJobIds(userId: string) {
   return new Set(rows.map((row) => row.jobId));
 }
 
+async function persistProviderJobs(result: JobProviderResult, filters: JobSearchFilters, userId: string, seenJobIds?: Set<string>) {
+  const savedRows = (await Promise.all(result.jobs.map(saveNormalizedJob)))
+    .filter((row): row is JobPostingRow => Boolean(row));
+  const savedJobIds = await getSavedJobIds(userId);
+  const dedupedRows = Array.from(new Map(savedRows.filter(Boolean).map((row) => [row.id, row])).values())
+    .filter((row) => {
+      if (!seenJobIds) return true;
+      if (seenJobIds.has(row.id)) return false;
+      seenJobIds.add(row.id);
+      return true;
+    });
+
+  return dedupedRows
+    .map((row) => toApiJob(row, filters, savedJobIds))
+    .sort((first, second) => second.matchScore - first.matchScore);
+}
+
 function buildLocalWhere(filters: JobSearchFilters) {
   const conditions: SQL[] = [eq(jobPostings.status, 'active')];
 
@@ -143,7 +160,7 @@ function buildLocalWhere(filters: JobSearchFilters) {
 
 export async function searchJobs(filters: JobSearchFilters, userId: string) {
   const providerResults: JobProviderResult[] = await Promise.all(
-    getConfiguredProviders().map(async (provider) => {
+    getSearchProviders(filters).map(async (provider) => {
       try {
         return await provider.search(filters);
       } catch (error) {
@@ -178,6 +195,73 @@ export async function searchJobs(filters: JobSearchFilters, userId: string) {
       error: result.error,
     })),
   };
+}
+
+export interface JobSearchStreamEvent {
+  type: 'provider-start' | 'provider-result' | 'local-cache' | 'done';
+  provider?: string;
+  jobs?: ApiJob[];
+  providerResult?: {
+    provider: string;
+    count: number;
+    error?: string;
+  };
+  total?: number;
+}
+
+export async function streamSearchJobs(
+  filters: JobSearchFilters,
+  userId: string,
+  emit: (event: JobSearchStreamEvent) => void,
+) {
+  const providers = getSearchProviders(filters);
+  const seenJobIds = new Set<string>();
+  let total = 0;
+
+  await Promise.all(providers.map(async (provider) => {
+    emit({ type: 'provider-start', provider: provider.name, total });
+
+    try {
+      const result = await provider.search(filters);
+      const jobs = await persistProviderJobs(result, filters, userId, seenJobIds);
+      total += jobs.length;
+      emit({
+        type: 'provider-result',
+        provider: result.provider,
+        jobs,
+        providerResult: result.error
+          ? { provider: result.provider, count: result.jobs.length, error: result.error }
+          : { provider: result.provider, count: result.jobs.length },
+        total,
+      });
+    } catch (error) {
+      emit({
+        type: 'provider-result',
+        provider: provider.name,
+        jobs: [],
+        providerResult: {
+          provider: provider.name,
+          count: 0,
+          error: error instanceof Error ? error.message : 'Provider failed.',
+        },
+        total,
+      });
+    }
+  }));
+
+  if (total === 0) {
+    const savedJobIds = await getSavedJobIds(userId);
+    const localRows = await db.select()
+      .from(jobPostings)
+      .where(buildLocalWhere(filters))
+      .orderBy(desc(jobPostings.lastSeenAt))
+      .limit(filters.limit);
+    const jobs = localRows.map((row) => toApiJob(row, filters, savedJobIds));
+    total += jobs.length;
+    emit({ type: 'local-cache', provider: 'Local cache', jobs, providerResult: { provider: 'Local cache', count: jobs.length }, total });
+  }
+
+  emit({ type: 'done', total });
 }
 
 export async function listSavedJobs(userId: string, filters: JobSearchFilters) {

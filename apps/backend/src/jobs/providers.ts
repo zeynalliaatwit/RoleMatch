@@ -11,29 +11,43 @@ import {
 } from './normalization.js';
 import type { JobProvider, JobProviderResult, JobSearchFilters, NormalizedJob } from './types.js';
 
-async function fetchJson<T>(url: string, init: RequestInit = {}, timeoutMs = 9000): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'RoleMatch Senior Project (local demo)',
-        ...(init.headers ?? {}),
-      },
-    });
+async function fetchJson<T>(url: string, init: RequestInit = {}, timeoutMs = 9000, attempts = 3): Promise<T> {
+  let lastError: unknown;
 
-    if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'RoleMatch Senior Project (local demo)',
+          ...(init.headers ?? {}),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+
+      return await response.json() as T;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) break;
+      await delay(400 * attempt);
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return await response.json() as T;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw lastError instanceof Error ? lastError : new Error('Fetch failed.');
 }
 
 function safeDate(value?: string | number | null) {
@@ -81,6 +95,14 @@ function normalizeLocationLabel(location?: string) {
     .trim();
 }
 
+function selectedSourceMatches(providerName: string, source?: string) {
+  if (!source || source === 'All sources') return true;
+  const normalizedProvider = providerName.toLowerCase();
+  const normalizedSource = source.toLowerCase();
+
+  return normalizedProvider === normalizedSource || normalizedProvider.startsWith(`${normalizedSource}:`);
+}
+
 export const remotiveProvider: JobProvider = {
   name: 'Remotive',
   async search(filters) {
@@ -116,8 +138,8 @@ export const remotiveProvider: JobProvider = {
 export const museProvider: JobProvider = {
   name: 'The Muse',
   async search(filters) {
-    const requestedJobs = Math.min(filters.limit, 100);
-    const requestedPages = Math.max(5, Math.ceil(requestedJobs / 3));
+    const requestedJobs = Math.min(filters.limit, 400);
+    const requestedPages = Math.max(5, Math.ceil(requestedJobs / 5));
     const isSoftwareSearch = /software|engineer|developer|frontend|backend|full\s?stack|data|web/i.test(filters.query ?? '');
     const buildUrl = (page: number) => {
       const url = new URL('https://www.themuse.com/api/public/jobs');
@@ -130,12 +152,15 @@ export const museProvider: JobProvider = {
     };
 
     const firstPage = await fetchJson<{ page_count?: number; results?: Array<Record<string, unknown>> }>(buildUrl(1), {}, 12000);
-    const pages = Math.max(1, Math.min(firstPage.page_count ?? requestedPages, requestedPages, 30));
-    const remainingResponses = pages > 1
-      ? await Promise.all(Array.from({ length: pages - 1 }, (_, index) => (
-        fetchJson<{ results?: Array<Record<string, unknown>> }>(buildUrl(index + 2), {}, 12000)
-      )))
-      : [];
+    const pages = Math.max(1, Math.min(firstPage.page_count ?? requestedPages, requestedPages, 60));
+    const remainingResponses: Array<{ results?: Array<Record<string, unknown>> }> = [];
+    for (let page = 2; page <= pages; page += 1) {
+      try {
+        remainingResponses.push(await fetchJson<{ results?: Array<Record<string, unknown>> }>(buildUrl(page), {}, 12000));
+      } catch {
+        break;
+      }
+    }
     const responses = [firstPage, ...remainingResponses];
 
     const jobs = responses.flatMap((data) => data.results ?? []).map((item) => {
@@ -245,8 +270,8 @@ export const adzunaProvider: JobProvider = {
       return { provider: this.name, jobs: [], error: 'ADZUNA_APP_ID and ADZUNA_APP_KEY are not configured.' };
     }
 
-    const requestedJobs = Math.min(filters.limit, 100);
-    const pages = Math.max(1, Math.min(Math.ceil(requestedJobs / 50), 4));
+    const requestedJobs = Math.min(filters.limit, 400);
+    const pages = Math.max(1, Math.min(Math.ceil(requestedJobs / 50), 8));
     const responses = await Promise.all(Array.from({ length: pages }, (_, index) => {
       const url = new URL(`https://api.adzuna.com/v1/api/jobs/${country}/search/${index + 1}`);
       url.searchParams.set('app_id', appId);
@@ -292,6 +317,68 @@ export const adzunaProvider: JobProvider = {
     return { provider: this.name, jobs: filterAndLimit(jobs, filters) };
   },
 };
+
+export function workdayProvider(label: string, host: string, tenant: string, site: string): JobProvider {
+  return {
+    name: `Workday:${label}`,
+    async search(filters) {
+      const requestedJobs = Math.min(filters.limit, 400);
+      const pageSize = Math.min(20, requestedJobs);
+      const pages = Math.max(1, Math.min(Math.ceil(requestedJobs / pageSize), 20));
+      const baseUrl = `https://${host.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
+      const searchUrl = `${baseUrl}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}/jobs`;
+      const responses: Array<{ jobPostings?: Array<Record<string, unknown>> }> = [];
+      for (let index = 0; index < pages; index += 1) {
+        responses.push(await fetchJson<{ jobPostings?: Array<Record<string, unknown>> }>(searchUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appliedFacets: {},
+            limit: pageSize,
+            offset: index * pageSize,
+            searchText: filters.query ?? '',
+          }),
+        }, 14000));
+      }
+
+      const jobs = responses.flatMap((data) => data.jobPostings ?? []).map((item) => {
+        const title = String(item.title ?? 'Untitled role');
+        const externalPath = String(item.externalPath ?? '');
+        const location = String(item.locationsText ?? 'Not specified');
+        const bulletFields = Array.isArray(item.bulletFields) ? item.bulletFields.map(String) : [];
+        const remoteType = String(item.remoteType ?? '');
+        const postedOn = String(item.postedOn ?? '');
+
+        return {
+          source: 'Workday',
+          externalId: bulletFields[0] ?? externalPath,
+          company: label,
+          title,
+          location,
+          remote: inferRemote(`${location} ${remoteType}`),
+          employmentType: undefined,
+          experienceLevel: inferExperienceLevel(title, ''),
+          jobUrl: `${baseUrl}/${site}${externalPath}`,
+          description: [title, label, location, remoteType, postedOn, ...bulletFields].filter(Boolean).join(' - '),
+          requirements: [],
+          tags: [remoteType, ...bulletFields].filter(Boolean),
+          postedAt: undefined,
+        } satisfies NormalizedJob;
+      }).filter((job) => job.jobUrl);
+
+      return { provider: this.name, jobs: filterAndLimit(jobs, filters) };
+    },
+  };
+}
+
+function unsupportedProvider(name: string, reason: string): JobProvider {
+  return {
+    name,
+    async search() {
+      return { provider: name, jobs: [], error: reason };
+    },
+  };
+}
 
 export function leverProvider(companySlug: string): JobProvider {
   return {
@@ -369,7 +456,7 @@ export const usaJobsProvider: JobProvider = {
     if (filters.query) url.searchParams.set('Keyword', filters.query);
     if (filters.location) url.searchParams.set('LocationName', filters.location);
     if (filters.remote) url.searchParams.set('RemoteIndicator', 'true');
-    url.searchParams.set('ResultsPerPage', String(Math.min(filters.limit, 50)));
+    url.searchParams.set('ResultsPerPage', String(Math.min(filters.limit, 500)));
 
     const data = await fetchJson<{ SearchResult?: { SearchResultItems?: Array<Record<string, unknown>> } }>(url.toString(), {
       headers: {
@@ -417,10 +504,25 @@ export function getConfiguredProviders(): JobProvider[] {
   const providers: JobProvider[] = [museProvider, remotiveProvider, arbeitnowProvider, remoteOkProvider, adzunaProvider];
   const leverCompanies = (process.env.LEVER_COMPANIES ?? '').split(',').map((value) => value.trim()).filter(Boolean);
   const greenhouseBoards = (process.env.GREENHOUSE_BOARDS ?? '').split(',').map((value) => value.trim()).filter(Boolean);
+  const workdaySites = (process.env.WORKDAY_SITES ?? 'Workday|workday.wd5.myworkdayjobs.com|workday|Workday')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((entry) => entry.split('|').map((part) => part.trim()))
+    .filter((parts): parts is [string, string, string, string] => parts.length === 4 && parts.every(Boolean));
 
   providers.push(...leverCompanies.map(leverProvider));
   providers.push(...greenhouseBoards.map(greenhouseProvider));
+  providers.push(...workdaySites.map(([label, host, tenant, site]) => workdayProvider(label, host, tenant, site)));
   providers.push(usaJobsProvider);
+  providers.push(
+    unsupportedProvider('Indeed', 'Indeed search access requires approved partner/API access; direct scraping/bot access is not implemented.'),
+    unsupportedProvider('LinkedIn', 'LinkedIn crawling requires express permission or approved Talent Solutions API access; direct scraping is not implemented.'),
+  );
 
-  return providers;
+  return providers.filter((provider) => selectedSourceMatches(provider.name, process.env.ROLEMATCH_SOURCE_FILTER));
+}
+
+export function getSearchProviders(filters: JobSearchFilters): JobProvider[] {
+  return getConfiguredProviders().filter((provider) => selectedSourceMatches(provider.name, filters.source));
 }
