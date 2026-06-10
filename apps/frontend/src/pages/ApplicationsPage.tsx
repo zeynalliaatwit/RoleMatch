@@ -1,13 +1,19 @@
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { applications, type ApplicationStatus } from '../data/mockData';
 import { StatusBadge } from '../components/StatusBadge';
 
-const statusFilters: Array<ApplicationStatus | 'all'> = ['all', 'saved', 'draft', 'submitted', 'interview', 'blocked', 'rejected'];
+const statusFilters: Array<ApplicationStatus | 'all'> = ['all', 'submitted', 'interview', 'blocked', 'rejected', 'offer'];
+
+function parseStatus(value: string | null): ApplicationStatus | 'all' {
+  return statusFilters.includes(value as ApplicationStatus | 'all') ? value as ApplicationStatus | 'all' : 'all';
+}
 
 export function ApplicationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<ApplicationStatus | 'all'>('all');
+  const status = parseStatus(searchParams.get('status'));
 
   const filteredApplications = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -21,13 +27,17 @@ export function ApplicationsPage() {
     });
   }, [query, status]);
 
+  const updateStatus = (nextStatus: ApplicationStatus | 'all') => {
+    setSearchParams(nextStatus === 'all' ? {} : { status: nextStatus });
+  };
+
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <span className="eyebrow">Tracker</span>
-          <h1>Applications</h1>
-          <p>{filteredApplications.length} records in the current workspace</p>
+          <h1>Application tracker</h1>
+          <p>{filteredApplications.length} application records in the current workspace</p>
         </div>
       </header>
 
@@ -47,7 +57,7 @@ export function ApplicationsPage() {
               className={status === filter ? 'active' : ''}
               key={filter}
               type="button"
-              onClick={() => setStatus(filter)}
+              onClick={() => updateStatus(filter)}
             >
               {filter === 'all' ? 'All' : filter[0].toUpperCase() + filter.slice(1)}
             </button>

@@ -1,6 +1,6 @@
 export type JobSource = 'Company Site' | 'Glassdoor' | 'Greenhouse' | 'iCIMS' | 'Lever' | 'Workday';
 
-export type ApplicationStatus = 'blocked' | 'draft' | 'interview' | 'offer' | 'rejected' | 'saved' | 'submitted';
+export type ApplicationStatus = 'blocked' | 'interview' | 'offer' | 'rejected' | 'submitted';
 
 export interface JobListing {
   id: string;
@@ -41,9 +41,9 @@ export interface ProfileDocument {
 }
 
 export const userProfile = {
-  name: 'Abraham Reay II',
-  title: 'Computer Science senior',
-  location: 'Attleboro, MA',
+  name: 'RoleMatch user',
+  title: 'Profile setup',
+  location: 'Location not set',
   targetRoles: ['Software Engineer', 'Full Stack Developer', 'Data Analyst'],
   targetLocation: 'Remote or within 100 miles',
   salaryFloor: '$60,000+',
@@ -57,7 +57,7 @@ export const userProfile = {
 };
 
 export const profileDocuments: ProfileDocument[] = [
-  { id: 'doc-1', name: 'Primary resume', status: 'Current draft', updated: 'May 24' },
+  { id: 'doc-1', name: 'Primary resume', status: 'Current version', updated: 'May 24' },
   { id: 'doc-2', name: 'Cover letter template', status: 'Needs review', updated: 'May 21' },
   { id: 'doc-3', name: 'Project portfolio notes', status: 'Imported', updated: 'May 19' },
 ];
@@ -172,19 +172,19 @@ export const applications: ApplicationRecord[] = [
     lastUpdate: 'May 27',
     submittedDate: 'May 26',
     nextStep: 'Watch for confirmation email',
-    owner: 'Abe',
+    owner: 'User',
   },
   {
     id: 'app-2',
     title: 'Full Stack Developer',
     company: 'Aster Health',
     source: 'Lever',
-    status: 'draft',
+    status: 'submitted',
     fitScore: 91,
     lastUpdate: 'May 27',
-    submittedDate: 'Not submitted',
-    nextStep: 'Review tailored resume',
-    owner: 'Abe',
+    submittedDate: 'May 27',
+    nextStep: 'Watch for confirmation email',
+    owner: 'User',
   },
   {
     id: 'app-3',
@@ -208,7 +208,7 @@ export const applications: ApplicationRecord[] = [
     lastUpdate: 'May 24',
     submittedDate: 'Not submitted',
     nextStep: 'Manual CAPTCHA review',
-    owner: 'Abe',
+    owner: 'User',
     blocker: 'Application page requires manual verification before submission.',
   },
   {
@@ -216,12 +216,12 @@ export const applications: ApplicationRecord[] = [
     title: 'Software Developer I',
     company: 'CivicData Labs',
     source: 'Company Site',
-    status: 'saved',
+    status: 'submitted',
     fitScore: 88,
     lastUpdate: 'May 23',
-    submittedDate: 'Not submitted',
-    nextStep: 'Decide whether to start application',
-    owner: 'Abe',
+    submittedDate: 'May 23',
+    nextStep: 'Watch for confirmation email',
+    owner: 'User',
   },
   {
     id: 'app-6',
@@ -233,6 +233,6 @@ export const applications: ApplicationRecord[] = [
     lastUpdate: 'May 21',
     submittedDate: 'May 18',
     nextStep: 'Archive after email sync',
-    owner: 'Abe',
+    owner: 'User',
   },
 ];

@@ -9,6 +9,8 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { listSavedJobs, searchJobs, setSavedJob } from './jobs/jobService.js';
+import type { JobSearchFilters } from './jobs/types.js';
 
 const app = express();
 
@@ -57,6 +59,42 @@ app.get('/api/profile', async (req, res) => {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
+
+function getUserIdFromAuthHeader(authHeader?: string) {
+  if (!authHeader) {
+    throw new Error('Unauthorized');
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    throw new Error('Malformed authorization token.');
+  }
+
+  const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+  const userId = decoded.userId;
+
+  if (typeof userId !== 'string') {
+    throw new Error('Invalid authorization token.');
+  }
+
+  return userId;
+}
+
+function parseJobFilters(query: Record<string, unknown>): JobSearchFilters {
+  const rawLimit = Number(query.limit ?? 30);
+  const rawMinSalary = Number(query.minSalary ?? 0);
+
+  return {
+    query: typeof query.query === 'string' ? query.query.trim() : undefined,
+    location: typeof query.location === 'string' ? query.location.trim() : undefined,
+    remote: query.remote === 'true',
+    employmentType: typeof query.employmentType === 'string' && query.employmentType !== 'Any' ? query.employmentType : undefined,
+    experienceLevel: typeof query.experienceLevel === 'string' && query.experienceLevel !== 'Any' ? query.experienceLevel : undefined,
+    minSalary: Number.isFinite(rawMinSalary) && rawMinSalary > 0 ? rawMinSalary : undefined,
+    source: typeof query.source === 'string' ? query.source : undefined,
+    limit: Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 75)) : 30,
+  };
+}
 
 // POST /api/auth/register
 app.post('/api/auth/register', async (req, res) => {
@@ -108,6 +146,57 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ token, userId: user.id, email: user.email });
   } catch (error) {
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+// GET /api/jobs/search
+app.get('/api/jobs/search', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const result = await searchJobs(parseJobFilters(req.query), userId);
+
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to search jobs.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : 500;
+
+    res.status(status).json({ error: message });
+  }
+});
+
+// GET /api/jobs/saved
+app.get('/api/jobs/saved', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const jobs = await listSavedJobs(userId, parseJobFilters(req.query));
+
+    res.json({ jobs });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load saved jobs.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : 500;
+
+    res.status(status).json({ error: message });
+  }
+});
+
+// PUT /api/jobs/:jobId/save
+app.put('/api/jobs/:jobId/save', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const { jobId } = req.params;
+
+    if (!jobId) {
+      return res.status(400).json({ error: 'Missing job id.' });
+    }
+
+    const saved = await setSavedJob(userId, jobId, Boolean(req.body.saved));
+
+    res.json({ saved });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update saved job.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : message.includes('not found') ? 404 : 500;
+
+    res.status(status).json({ error: message });
   }
 });
 
