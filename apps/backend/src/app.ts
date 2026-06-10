@@ -9,7 +9,7 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { listApplications, type ApplicationStatus } from './applications/applicationService.js';
+import { createOrUpdateApplication, listApplications, type ApplicationStatus, type CreateApplicationInput } from './applications/applicationService.js';
 import { listSavedJobs, searchJobs, setSavedJob } from './jobs/jobService.js';
 import type { JobSearchFilters } from './jobs/types.js';
 
@@ -97,7 +97,12 @@ function parseJobFilters(query: Record<string, unknown>): JobSearchFilters {
   const rawMinSalary = Number(query.minSalary ?? 0);
   const rawLocation = typeof query.location === 'string' ? query.location.trim() : '';
   const locationIncludesRemote = /\bremote\b/i.test(rawLocation);
-  const location = rawLocation.replace(/\bremote\b/gi, '').replace(/[, ]+/g, ' ').trim();
+  const location = rawLocation
+    .replace(/\bremote\b/gi, '')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .replace(/,\s*$/g, '')
+    .trim();
 
   return {
     query: typeof query.query === 'string' ? query.query.trim() : undefined,
@@ -107,7 +112,7 @@ function parseJobFilters(query: Record<string, unknown>): JobSearchFilters {
     experienceLevel: typeof query.experienceLevel === 'string' && query.experienceLevel !== 'Any' ? query.experienceLevel : undefined,
     minSalary: Number.isFinite(rawMinSalary) && rawMinSalary > 0 ? rawMinSalary : undefined,
     source: typeof query.source === 'string' ? query.source : undefined,
-    limit: Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 75)) : 30,
+    limit: Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 200)) : 75,
   };
 }
 
@@ -184,6 +189,27 @@ app.get('/api/applications', async (req, res) => {
   }
 });
 
+// POST /api/applications
+app.post('/api/applications', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const application = await createOrUpdateApplication(userId, req.body as CreateApplicationInput);
+
+    res.status(201).json({ application });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create application.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token')
+      ? 401
+      : message.includes('not found')
+        ? 404
+        : message.includes('need')
+          ? 400
+          : 500;
+
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
+  }
+});
+
 // GET /api/jobs/search
 app.get('/api/jobs/search', async (req, res) => {
   try {
@@ -230,6 +256,43 @@ app.put('/api/jobs/:jobId/save', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update saved job.';
     const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : message.includes('not found') ? 404 : 500;
+
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
+  }
+});
+
+// PUT /api/profile
+app.put('/api/profile', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const skills = Array.isArray(req.body.skills)
+      ? req.body.skills.map(String).map((skill: string) => skill.trim()).filter(Boolean)
+      : typeof req.body.skills === 'string'
+        ? req.body.skills.split(',').map((skill: string) => skill.trim()).filter(Boolean)
+        : [];
+
+    const updated = await db.update(profiles)
+      .set({
+        fullName: String(req.body.fullName ?? '').trim() || 'RoleMatch User',
+        location: String(req.body.location ?? '').trim() || null,
+        education: String(req.body.education ?? '').trim() || null,
+        workExperience: String(req.body.workExperience ?? '').trim() || null,
+        linkedinUrl: String(req.body.linkedinUrl ?? '').trim() || null,
+        githubUrl: String(req.body.githubUrl ?? '').trim() || null,
+        workAuthorization: String(req.body.workAuthorization ?? '').trim() || null,
+        skills: skills.length > 0 ? skills : null,
+      })
+      .where(eq(profiles.userId, userId))
+      .returning();
+
+    if (!updated[0]) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+
+    res.json({ profile: updated[0] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update profile.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : 500;
 
     res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
   }

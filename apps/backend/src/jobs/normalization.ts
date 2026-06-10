@@ -25,6 +25,46 @@ export function normalizeText(value?: string | null) {
   return (value ?? '').toLowerCase().trim();
 }
 
+function normalizedLocation(value?: string | null) {
+  return normalizeText(value)
+    .replace(/\bu\.s\.a?\b/g, 'united states')
+    .replace(/\busa\b/g, 'united states')
+    .replace(/\bu\.s\.\b/g, 'united states')
+    .replace(/\s+/g, ' ');
+}
+
+function isBroadRemoteLocation(value: string) {
+  const location = normalizedLocation(value);
+
+  if (!location) return true;
+  if (/^(remote|anywhere|worldwide|global)$/.test(location)) return true;
+  if (/remote.*(united states|us only|usa|north america|americas)/.test(location)) return true;
+  if (/(united states|north america|americas)/.test(location) && !/(brazil|germany|europe|india|portugal|spain|france|poland|romania|canada|mexico|argentina|colombia|chile|peru)/.test(location)) return true;
+
+  return false;
+}
+
+export function matchesLocation(job: NormalizedJob, filters: JobSearchFilters) {
+  if (!filters.location) {
+    return !filters.remote || job.remote;
+  }
+
+  const queryLocation = normalizedLocation(filters.location);
+  const jobLocation = normalizedLocation(job.location);
+
+  if (jobLocation.includes(queryLocation)) return true;
+
+  if (/\bboston\b/.test(queryLocation) && /\b(boston|cambridge|massachusetts|ma)\b/.test(jobLocation)) {
+    return true;
+  }
+
+  if (filters.remote && job.remote) {
+    return isBroadRemoteLocation(jobLocation);
+  }
+
+  return false;
+}
+
 export function inferRemote(location?: string | null, remoteValue?: boolean | string | number | null) {
   if (typeof remoteValue === 'boolean') return remoteValue;
   if (typeof remoteValue === 'string' && ['1', 'true', 'yes', 'remote'].includes(remoteValue.toLowerCase())) return true;
@@ -122,7 +162,7 @@ export function calculateMatchScore(job: NormalizedJob, filters: JobSearchFilter
     score += Math.round((matchedTerms / queryTerms.length) * 25);
   }
 
-  if (filters.location && job.location.toLowerCase().includes(filters.location.toLowerCase())) score += 8;
+  if (filters.location && matchesLocation(job, filters)) score += 8;
   if (filters.remote && job.remote) score += 10;
   if (filters.employmentType && filters.employmentType === job.employmentType) score += 7;
   if (filters.experienceLevel && filters.experienceLevel === job.experienceLevel) score += 7;
@@ -140,12 +180,7 @@ export function matchesFilters(job: NormalizedJob, filters: JobSearchFilters) {
     if (!terms.every((term) => haystack.includes(term))) return false;
   }
 
-  if (filters.location) {
-    const location = filters.location.toLowerCase();
-    if (!job.location.toLowerCase().includes(location) && !(filters.remote && job.remote)) return false;
-  }
-
-  if (filters.remote && !job.remote) return false;
+  if (!matchesLocation(job, filters)) return false;
   if (filters.source && filters.source !== 'All sources' && normalizeText(job.source) !== normalizeText(filters.source)) return false;
   if (filters.employmentType && filters.employmentType !== 'Any' && job.employmentType !== filters.employmentType) return false;
   if (filters.experienceLevel && filters.experienceLevel !== 'Any' && job.experienceLevel !== filters.experienceLevel) return false;

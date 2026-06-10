@@ -1,5 +1,6 @@
 import { BookmarkCheck, CalendarClock, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createApplication } from '../api/applications';
 import { getSavedJobs, setJobSaved, type ApiJob } from '../api/jobs';
 import { JobCard } from '../components/JobCard';
 
@@ -14,7 +15,9 @@ export function SavedJobsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('match');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [pendingJobId, setPendingJobId] = useState<string | null>(null);
+  const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSavedJobs = async () => {
@@ -51,6 +54,7 @@ export function SavedJobsPage() {
   const handleToggleSaved = async (job: ApiJob) => {
     setPendingJobId(job.id);
     setError('');
+    setNotice('');
 
     try {
       await setJobSaved(job.id, false);
@@ -59,6 +63,25 @@ export function SavedJobsPage() {
       setError(err instanceof Error ? err.message : 'Unable to update saved job.');
     } finally {
       setPendingJobId(null);
+    }
+  };
+
+  const handleTrackApplication = async (job: ApiJob) => {
+    setTrackingJobId(job.id);
+    setError('');
+    setNotice('');
+
+    try {
+      await createApplication({
+        jobId: job.id,
+        status: 'submitted',
+        evidenceNotes: 'Tracked from saved jobs after opening or completing the external job application.',
+      });
+      setNotice(`${job.title} at ${job.company} was added to the application tracker.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to track application.');
+    } finally {
+      setTrackingJobId(null);
     }
   };
 
@@ -94,6 +117,7 @@ export function SavedJobsPage() {
       </section>
 
       {error && <div className="error-banner">{error}</div>}
+      {notice && <div className="notice-banner">{notice}</div>}
 
       <section className="job-grid" aria-label="Saved job list">
         {sortedJobs.map((job) => (
@@ -101,7 +125,9 @@ export function SavedJobsPage() {
             key={job.id}
             job={job}
             pending={pendingJobId === job.id}
+            tracking={trackingJobId === job.id}
             onToggleSaved={handleToggleSaved}
+            onTrackApplication={handleTrackApplication}
           />
         ))}
       </section>

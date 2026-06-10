@@ -473,7 +473,7 @@
 }
 
 .search-toolbar-expanded {
-  grid-template-columns: minmax(260px, 1.4fr) minmax(180px, 0.9fr) 150px 140px 150px 140px 136px 118px;
+  grid-template-columns: minmax(260px, 1.35fr) minmax(170px, 0.9fr) repeat(5, minmax(118px, 0.65fr)) 132px 118px;
 }
 
 .tracker-toolbar {
@@ -506,7 +506,8 @@
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--border);
@@ -516,8 +517,15 @@ select {
 }
 
 input,
-select {
+select,
+textarea {
   padding: 8px 10px;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  font: inherit;
 }
 
 .input-with-icon input {
@@ -674,6 +682,36 @@ input[type="range"] {
   overflow-x: auto;
 }
 
+.manual-application-form,
+.profile-edit-form {
+  margin-bottom: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.field-full {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .application-table {
   min-width: 900px;
 }
@@ -772,6 +810,13 @@ input[type="range"] {
   font-size: 0.84rem;
 }
 
+.connection-list a {
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (max-width: 1040px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -832,6 +877,10 @@ input[type="range"] {
   .tracker-toolbar {
     grid-template-columns: 1fr;
   }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 680px) {
@@ -858,7 +907,8 @@ input[type="range"] {
   }
 
   .button-row,
-  .profile-actions {
+  .profile-actions,
+  .form-actions {
     width: 100%;
   }
 

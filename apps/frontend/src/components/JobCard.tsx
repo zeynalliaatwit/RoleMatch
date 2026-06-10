@@ -1,11 +1,13 @@
-import { Bookmark, BriefcaseBusiness, ExternalLink, MapPin } from 'lucide-react';
+import { Bookmark, BriefcaseBusiness, ClipboardCheck, ExternalLink, MapPin } from 'lucide-react';
 import { formatPostedAt, formatSalary, type ApiJob } from '../api/jobs';
 
 interface JobCardProps {
   job: ApiJob;
   compact?: boolean;
   pending?: boolean;
+  tracking?: boolean;
   onToggleSaved?: (job: ApiJob) => void;
+  onTrackApplication?: (job: ApiJob) => void;
 }
 
 function summarize(description: string) {
@@ -13,7 +15,7 @@ function summarize(description: string) {
   return description.length > 210 ? `${description.slice(0, 207).trim()}...` : description;
 }
 
-export function JobCard({ job, compact = false, pending = false, onToggleSaved }: JobCardProps) {
+export function JobCard({ job, compact = false, pending = false, tracking = false, onToggleSaved, onTrackApplication }: JobCardProps) {
   const tags = job.tags.length > 0
     ? job.tags.slice(0, compact ? 3 : 6)
     : [job.employmentType, job.experienceLevel, job.remote ? 'Remote' : null].filter((tag): tag is string => Boolean(tag));
@@ -71,6 +73,17 @@ export function JobCard({ job, compact = false, pending = false, onToggleSaved }
             <ExternalLink size={16} aria-hidden="true" />
             Open job
           </a>
+          {onTrackApplication && !compact && (
+            <button
+              className="button secondary"
+              type="button"
+              disabled={tracking}
+              onClick={() => onTrackApplication(job)}
+            >
+              <ClipboardCheck size={16} aria-hidden="true" />
+              {tracking ? 'Tracking' : 'Track applied'}
+            </button>
+          )}
         </div>
       </div>
     </article>

@@ -67,6 +67,20 @@ function filterAndLimit(jobs: NormalizedJob[], filters: JobSearchFilters) {
     .slice(0, filters.limit);
 }
 
+function museLocation(location?: string) {
+  const normalized = normalizeLocationLabel(location);
+  if (/^boston(,\s*ma|\s+ma)?$/i.test(normalized)) return 'Boston, MA';
+
+  return normalized;
+}
+
+function normalizeLocationLabel(location?: string) {
+  return (location ?? '')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export const remotiveProvider: JobProvider = {
   name: 'Remotive',
   async search(filters) {
@@ -91,6 +105,64 @@ export const remotiveProvider: JobProvider = {
         description,
         requirements: extractRequirements(description),
         tags: Array.isArray(item.tags) ? item.tags.map(String) : [String(item.category ?? '')].filter(Boolean),
+        postedAt: safeDate(String(item.publication_date ?? '')),
+      } satisfies NormalizedJob;
+    }).filter((job) => job.jobUrl);
+
+    return { provider: this.name, jobs: filterAndLimit(jobs, filters) };
+  },
+};
+
+export const museProvider: JobProvider = {
+  name: 'The Muse',
+  async search(filters) {
+    const requestedJobs = Math.min(filters.limit, 100);
+    const requestedPages = Math.max(5, Math.ceil(requestedJobs / 3));
+    const isSoftwareSearch = /software|engineer|developer|frontend|backend|full\s?stack|data|web/i.test(filters.query ?? '');
+    const buildUrl = (page: number) => {
+      const url = new URL('https://www.themuse.com/api/public/jobs');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('descending', 'true');
+      if (filters.location) url.searchParams.set('location', museLocation(filters.location));
+      if (isSoftwareSearch) url.searchParams.set('category', 'Software Engineering');
+
+      return url.toString();
+    };
+
+    const firstPage = await fetchJson<{ page_count?: number; results?: Array<Record<string, unknown>> }>(buildUrl(1), {}, 12000);
+    const pages = Math.max(1, Math.min(firstPage.page_count ?? requestedPages, requestedPages, 30));
+    const remainingResponses = pages > 1
+      ? await Promise.all(Array.from({ length: pages - 1 }, (_, index) => (
+        fetchJson<{ results?: Array<Record<string, unknown>> }>(buildUrl(index + 2), {}, 12000)
+      )))
+      : [];
+    const responses = [firstPage, ...remainingResponses];
+
+    const jobs = responses.flatMap((data) => data.results ?? []).map((item) => {
+      const title = String(item.name ?? 'Untitled role');
+      const company = item.company && typeof item.company === 'object'
+        ? String((item.company as Record<string, unknown>).name ?? 'Unknown company')
+        : 'Unknown company';
+      const locations = Array.isArray(item.locations) ? item.locations as Array<Record<string, unknown>> : [];
+      const levels = Array.isArray(item.levels) ? item.levels as Array<Record<string, unknown>> : [];
+      const categories = Array.isArray(item.categories) ? item.categories as Array<Record<string, unknown>> : [];
+      const description = stripHtml(String(item.contents ?? ''));
+      const location = locations.map((entry) => String(entry.name ?? '')).filter(Boolean).join(', ') || 'Not specified';
+      const categoryTags = categories.map((entry) => String(entry.name ?? '')).filter(Boolean);
+
+      return {
+        source: 'The Muse',
+        externalId: String(item.id ?? item.refs ?? item.url ?? title),
+        company,
+        title,
+        location,
+        remote: inferRemote(location),
+        employmentType: undefined,
+        experienceLevel: levels[0]?.name ? String(levels[0].name) : undefined,
+        jobUrl: String(item.refs && typeof item.refs === 'object' ? (item.refs as Record<string, unknown>).landing_page ?? '' : ''),
+        description,
+        requirements: extractRequirements(description),
+        tags: categoryTags.length > 0 ? categoryTags : ['Software Engineering'],
         postedAt: safeDate(String(item.publication_date ?? '')),
       } satisfies NormalizedJob;
     }).filter((job) => job.jobUrl);
@@ -155,6 +227,65 @@ export const remoteOkProvider: JobProvider = {
         requirements: extractRequirements(description),
         tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
         postedAt: safeDate(String(item.date ?? '')),
+      } satisfies NormalizedJob;
+    }).filter((job) => job.jobUrl);
+
+    return { provider: this.name, jobs: filterAndLimit(jobs, filters) };
+  },
+};
+
+export const adzunaProvider: JobProvider = {
+  name: 'Adzuna',
+  async search(filters) {
+    const appId = process.env.ADZUNA_APP_ID;
+    const appKey = process.env.ADZUNA_APP_KEY;
+    const country = process.env.ADZUNA_COUNTRY || 'us';
+
+    if (!appId || !appKey) {
+      return { provider: this.name, jobs: [], error: 'ADZUNA_APP_ID and ADZUNA_APP_KEY are not configured.' };
+    }
+
+    const requestedJobs = Math.min(filters.limit, 100);
+    const pages = Math.max(1, Math.min(Math.ceil(requestedJobs / 50), 4));
+    const responses = await Promise.all(Array.from({ length: pages }, (_, index) => {
+      const url = new URL(`https://api.adzuna.com/v1/api/jobs/${country}/search/${index + 1}`);
+      url.searchParams.set('app_id', appId);
+      url.searchParams.set('app_key', appKey);
+      url.searchParams.set('content-type', 'application/json');
+      url.searchParams.set('results_per_page', String(Math.min(50, requestedJobs)));
+      if (filters.query) url.searchParams.set('what', filters.query);
+      if (filters.location) url.searchParams.set('where', filters.location);
+      if (filters.minSalary) url.searchParams.set('salary_min', String(filters.minSalary));
+      if (filters.remote) url.searchParams.set('what_or', 'remote');
+
+      return fetchJson<{ results?: Array<Record<string, unknown>> }>(url.toString(), {}, 12000);
+    }));
+
+    const jobs = responses.flatMap((data) => data.results ?? []).map((item) => {
+      const title = String(item.title ?? 'Untitled role');
+      const location = item.location && typeof item.location === 'object'
+        ? String((item.location as Record<string, unknown>).display_name ?? 'Not specified')
+        : 'Not specified';
+      const category = item.category && typeof item.category === 'object'
+        ? String((item.category as Record<string, unknown>).label ?? '')
+        : '';
+      const description = stripHtml(String(item.description ?? ''));
+
+      return {
+        source: 'Adzuna',
+        externalId: String(item.id ?? item.redirect_url ?? title),
+        company: String(item.company && typeof item.company === 'object' ? (item.company as Record<string, unknown>).display_name ?? 'Unknown company' : 'Unknown company'),
+        title,
+        location,
+        remote: inferRemote(location, filters.remote),
+        salaryMin: Number(item.salary_min ?? 0) || undefined,
+        salaryMax: Number(item.salary_max ?? 0) || undefined,
+        currency: country === 'us' ? 'USD' : undefined,
+        jobUrl: String(item.redirect_url ?? ''),
+        description,
+        requirements: extractRequirements(description),
+        tags: [category].filter(Boolean),
+        postedAt: safeDate(String(item.created ?? '')),
       } satisfies NormalizedJob;
     }).filter((job) => job.jobUrl);
 
@@ -283,7 +414,7 @@ export const usaJobsProvider: JobProvider = {
 };
 
 export function getConfiguredProviders(): JobProvider[] {
-  const providers: JobProvider[] = [remotiveProvider, arbeitnowProvider, remoteOkProvider];
+  const providers: JobProvider[] = [museProvider, remotiveProvider, arbeitnowProvider, remoteOkProvider, adzunaProvider];
   const leverCompanies = (process.env.LEVER_COMPANIES ?? '').split(',').map((value) => value.trim()).filter(Boolean);
   const greenhouseBoards = (process.env.GREENHOUSE_BOARDS ?? '').split(',').map((value) => value.trim()).filter(Boolean);
 

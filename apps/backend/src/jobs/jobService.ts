@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { jobPostings, savedJobs } from '../db/schema.js';
-import { calculateMatchScore } from './normalization.js';
+import { calculateMatchScore, truncate } from './normalization.js';
 import { getConfiguredProviders } from './providers.js';
 import type { JobProviderResult, JobSearchFilters, NormalizedJob } from './types.js';
 
@@ -75,19 +75,19 @@ function toApiJob(row: JobPostingRow, filters: JobSearchFilters, savedJobIds: Se
 async function saveNormalizedJob(job: NormalizedJob) {
   const existing = await db.select().from(jobPostings).where(eq(jobPostings.jobUrl, job.jobUrl)).limit(1);
   const values: typeof jobPostings.$inferInsert = {
-    source: job.source,
-    externalId: job.externalId ?? null,
-    company: job.company,
-    title: job.title,
-    normalizedTitle: job.normalizedTitle ?? null,
-    location: job.location,
+    source: truncate(job.source, 100),
+    externalId: job.externalId ? truncate(job.externalId, 255) : null,
+    company: truncate(job.company, 255),
+    title: truncate(job.title, 255),
+    normalizedTitle: job.normalizedTitle ? truncate(job.normalizedTitle, 255) : null,
+    location: truncate(job.location, 255),
     remote: job.remote,
-    employmentType: job.employmentType ?? null,
-    experienceLevel: job.experienceLevel ?? null,
-    salaryRange: job.salaryRange ?? null,
+    employmentType: job.employmentType ? truncate(job.employmentType, 100) : null,
+    experienceLevel: job.experienceLevel ? truncate(job.experienceLevel, 100) : null,
+    salaryRange: job.salaryRange ? truncate(job.salaryRange, 100) : null,
     salaryMin: job.salaryMin ?? null,
     salaryMax: job.salaryMax ?? null,
-    currency: job.currency ?? null,
+    currency: job.currency ? truncate(job.currency, 10) : null,
     jobUrl: job.jobUrl,
     description: job.description,
     requirements: job.requirements.length > 0 ? job.requirements : null,
