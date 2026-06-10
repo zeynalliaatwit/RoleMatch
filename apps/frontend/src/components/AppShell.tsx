@@ -1,7 +1,7 @@
 import { Bookmark, BriefcaseBusiness, ClipboardList, Home, LogOut, Search, User } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { API_BASE_URL } from '../api/jobs';
+import { API_BASE_URL } from '../api/client';
 
 const navItems = [
   { to: '/', label: 'Home', icon: Home },

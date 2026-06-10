@@ -1,38 +1,43 @@
 import { Bookmark, CheckCircle2, Clock3, FileWarning, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { applications } from '../data/mockData';
+import { getApplications, type ApiApplication } from '../api/applications';
 import { getSavedJobs, searchJobs, type ApiJob } from '../api/jobs';
 import { JobCard } from '../components/JobCard';
 import { StatCard } from '../components/StatCard';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function DashboardPage() {
+  const [applications, setApplications] = useState<ApiApplication[]>([]);
   const [savedJobs, setSavedJobs] = useState<ApiJob[]>([]);
   const [topMatches, setTopMatches] = useState<ApiJob[]>([]);
-  const [jobsError, setJobsError] = useState('');
+  const [dataError, setDataError] = useState('');
 
-  const submittedApplications = useMemo(() => applications.filter((application) => application.status === 'submitted'), []);
-  const interviews = useMemo(() => applications.filter((application) => application.status === 'interview'), []);
-  const blockedApplications = useMemo(() => applications.filter((application) => application.status === 'blocked'), []);
+  const submittedApplications = useMemo(() => applications.filter((application) => application.status === 'submitted'), [applications]);
+  const interviews = useMemo(() => applications.filter((application) => application.status === 'interview'), [applications]);
+  const blockedApplications = useMemo(() => applications.filter((application) => application.status === 'blocked'), [applications]);
   const recentApplications = applications.slice(0, 4);
 
   useEffect(() => {
-    const loadDashboardJobs = async () => {
+    const loadDashboardData = async () => {
+      setDataError('');
+
       try {
-        const [saved, matches] = await Promise.all([
+        const [applicationRows, saved, matches] = await Promise.all([
+          getApplications(),
           getSavedJobs(),
           searchJobs({ query: 'software engineer', limit: 3 }),
         ]);
 
+        setApplications(applicationRows);
         setSavedJobs(saved);
         setTopMatches(matches.jobs.slice(0, 3));
       } catch (err: unknown) {
-        setJobsError(err instanceof Error ? err.message : 'Unable to load live job data.');
+        setDataError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
       }
     };
 
-    void loadDashboardJobs();
+    void loadDashboardData();
   }, []);
 
   return (
@@ -64,7 +69,7 @@ export function DashboardPage() {
         </Link>
       </section>
 
-      {jobsError && <div className="notice-banner">{jobsError}</div>}
+      {dataError && <div className="notice-banner">{dataError}</div>}
 
       <div className="dashboard-grid">
         <section className="panel">
@@ -79,7 +84,7 @@ export function DashboardPage() {
             {topMatches.map((job) => (
               <JobCard key={job.id} job={job} compact />
             ))}
-            {!jobsError && topMatches.length === 0 && (
+            {!dataError && topMatches.length === 0 && (
               <p className="muted-copy">Search jobs to populate live matches from supported sources.</p>
             )}
           </div>
@@ -103,6 +108,9 @@ export function DashboardPage() {
                 <StatusBadge status={application.status} />
               </article>
             ))}
+            {recentApplications.length === 0 && (
+              <p className="muted-copy">No applications have been created yet.</p>
+            )}
           </div>
         </section>
       </div>

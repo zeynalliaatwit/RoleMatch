@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { applications, type ApplicationStatus } from '../data/mockData';
+import { formatApplicationDate, getApplications, type ApiApplication, type ApplicationStatus } from '../api/applications';
 import { StatusBadge } from '../components/StatusBadge';
 
 const statusFilters: Array<ApplicationStatus | 'all'> = ['all', 'submitted', 'interview', 'blocked', 'rejected', 'offer'];
@@ -12,20 +12,40 @@ function parseStatus(value: string | null): ApplicationStatus | 'all' {
 
 export function ApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [applications, setApplications] = useState<ApiApplication[]>([]);
   const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const status = parseStatus(searchParams.get('status'));
+
+  useEffect(() => {
+    const loadApplications = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const rows = await getApplications(status);
+        setApplications(rows);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Unable to load applications.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadApplications();
+  }, [status]);
 
   const filteredApplications = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return applications.filter((application) => {
-      const matchesStatus = status === 'all' || application.status === status;
       const matchesQuery = !normalizedQuery
         || [application.title, application.company, application.source, application.nextStep].some((value) => value.toLowerCase().includes(normalizedQuery));
 
-      return matchesStatus && matchesQuery;
+      return matchesQuery;
     });
-  }, [query, status]);
+  }, [applications, query]);
 
   const updateStatus = (nextStatus: ApplicationStatus | 'all') => {
     setSearchParams(nextStatus === 'all' ? {} : { status: nextStatus });
@@ -37,7 +57,7 @@ export function ApplicationsPage() {
         <div>
           <span className="eyebrow">Tracker</span>
           <h1>Application tracker</h1>
-          <p>{filteredApplications.length} application records in the current workspace</p>
+          <p>{loading ? 'Loading application records...' : `${filteredApplications.length} application records in the current workspace`}</p>
         </div>
       </header>
 
@@ -65,6 +85,8 @@ export function ApplicationsPage() {
         </div>
       </section>
 
+      {error && <div className="error-banner">{error}</div>}
+
       <section className="panel table-panel" aria-label="Application tracker">
         <div className="application-table">
           <div className="table-row table-head">
@@ -83,8 +105,8 @@ export function ApplicationsPage() {
               </div>
               <span>{application.source}</span>
               <StatusBadge status={application.status} />
-              <span>{application.fitScore}%</span>
-              <span>{application.lastUpdate}</span>
+              <span>{application.matchScore === null ? 'Not scored' : `${application.matchScore}%`}</span>
+              <span>{formatApplicationDate(application.lastUpdate)}</span>
               <div>
                 <span>{application.nextStep}</span>
                 {application.blocker && <small>{application.blocker}</small>}
@@ -93,6 +115,13 @@ export function ApplicationsPage() {
           ))}
         </div>
       </section>
+
+      {!loading && !error && filteredApplications.length === 0 && (
+        <section className="empty-state">
+          <h2>No applications yet</h2>
+          <p>Saved jobs are not counted here. Application records will appear after an apply flow creates them.</p>
+        </section>
+      )}
     </div>
   );
 }

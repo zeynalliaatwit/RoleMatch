@@ -2,13 +2,14 @@
 import express from 'express';
 import cors from 'cors'; // 1. Import CORS
 import { db } from './db/index.js';
-import { profiles, users } from './db/schema.js';
+import { applications, profiles, savedJobs, users } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { listApplications, type ApplicationStatus } from './applications/applicationService.js';
 import { listSavedJobs, searchJobs, setSavedJob } from './jobs/jobService.js';
 import type { JobSearchFilters } from './jobs/types.js';
 
@@ -16,7 +17,7 @@ const app = express();
 
 // 2. Allow your React frontend origin to safely talk to this API
 app.use(cors({
-  origin: 'http://localhost:5173' 
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] 
 }));
 
 app.use(express.json());
@@ -47,14 +48,25 @@ app.get('/api/profile', async (req, res) => {
       return res.status(404).json({ error: "Profile not found." });
     }
 
+    const [applicationRows, savedRows] = await Promise.all([
+      db.select({ status: applications.status }).from(applications).where(eq(applications.userId, decoded.userId as string)),
+      db.select({ id: savedJobs.id }).from(savedJobs).where(eq(savedJobs.userId, decoded.userId as string)),
+    ]);
+
     // 3. Send the real database data
     res.json({
       ...userProfiles[0],
-      stats: { applications: 0, saved: 0, interviews: 0 } // You can wire these up to the real DB later
+      stats: {
+        applications: applicationRows.length,
+        saved: savedRows.length,
+        interviews: applicationRows.filter((application) => application.status === 'interview').length,
+      },
     });
   } catch (error) {
     console.error("Database error:", error);
-    res.status(500).json({ error: "Failed to fetch profile" });
+    const message = error instanceof Error ? error.message : 'Failed to fetch profile';
+    const status = message.includes('jwt') || message.includes('token') || message.includes('authorization') ? 401 : 500;
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
   }
 });
 
@@ -83,11 +95,14 @@ function getUserIdFromAuthHeader(authHeader?: string) {
 function parseJobFilters(query: Record<string, unknown>): JobSearchFilters {
   const rawLimit = Number(query.limit ?? 30);
   const rawMinSalary = Number(query.minSalary ?? 0);
+  const rawLocation = typeof query.location === 'string' ? query.location.trim() : '';
+  const locationIncludesRemote = /\bremote\b/i.test(rawLocation);
+  const location = rawLocation.replace(/\bremote\b/gi, '').replace(/[, ]+/g, ' ').trim();
 
   return {
     query: typeof query.query === 'string' ? query.query.trim() : undefined,
-    location: typeof query.location === 'string' ? query.location.trim() : undefined,
-    remote: query.remote === 'true',
+    location: location || undefined,
+    remote: query.remote === 'true' || locationIncludesRemote,
     employmentType: typeof query.employmentType === 'string' && query.employmentType !== 'Any' ? query.employmentType : undefined,
     experienceLevel: typeof query.experienceLevel === 'string' && query.experienceLevel !== 'Any' ? query.experienceLevel : undefined,
     minSalary: Number.isFinite(rawMinSalary) && rawMinSalary > 0 ? rawMinSalary : undefined,
@@ -149,6 +164,26 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+function parseApplicationStatus(value: unknown): ApplicationStatus | undefined {
+  const statuses = new Set<ApplicationStatus>(['blocked', 'interview', 'offer', 'rejected', 'submitted']);
+  return typeof value === 'string' && statuses.has(value as ApplicationStatus) ? value as ApplicationStatus : undefined;
+}
+
+// GET /api/applications
+app.get('/api/applications', async (req, res) => {
+  try {
+    const userId = getUserIdFromAuthHeader(req.headers.authorization);
+    const applications = await listApplications(userId, parseApplicationStatus(req.query.status));
+
+    res.json({ applications });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load applications.';
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : 500;
+
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
+  }
+});
+
 // GET /api/jobs/search
 app.get('/api/jobs/search', async (req, res) => {
   try {
@@ -158,9 +193,9 @@ app.get('/api/jobs/search', async (req, res) => {
     res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to search jobs.';
-    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : 500;
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : 500;
 
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
   }
 });
 
@@ -173,9 +208,9 @@ app.get('/api/jobs/saved', async (req, res) => {
     res.json({ jobs });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load saved jobs.';
-    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : 500;
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : 500;
 
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
   }
 });
 
@@ -194,9 +229,9 @@ app.put('/api/jobs/:jobId/save', async (req, res) => {
     res.json({ saved });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update saved job.';
-    const status = message.includes('Unauthorized') || message.includes('authorization') ? 401 : message.includes('not found') ? 404 : 500;
+    const status = message.includes('Unauthorized') || message.includes('authorization') || message.includes('jwt') || message.includes('token') ? 401 : message.includes('not found') ? 404 : 500;
 
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: status === 401 ? 'Session expired. Please log in again.' : message });
   }
 });
 

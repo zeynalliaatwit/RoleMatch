@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+import { API_BASE_URL, authHeaders, buildQuery, readJson } from './client';
 
 export interface ApiJob {
   id: string;
@@ -42,42 +42,6 @@ export interface JobSearchParams {
 export interface JobSearchResponse {
   jobs: ApiJob[];
   providerResults: ProviderStatus[];
-}
-
-function authHeaders() {
-  const token = localStorage.getItem('rolematch_token');
-
-  if (!token) {
-    throw new Error('You need to log in before searching jobs.');
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-function buildQuery(params: JobSearchParams = {}) {
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '' || value === 'Any' || value === 'All sources') {
-      return;
-    }
-
-    searchParams.set(key, String(value));
-  });
-
-  return searchParams.toString();
-}
-
-async function readJson<T>(response: Response): Promise<T> {
-  const data = await response.json().catch(() => null) as { error?: string } | null;
-
-  if (!response.ok) {
-    throw new Error(data?.error ?? 'Request failed.');
-  }
-
-  return data as T;
 }
 
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResponse> {

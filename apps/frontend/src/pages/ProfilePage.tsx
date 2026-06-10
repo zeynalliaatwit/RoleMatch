@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, Briefcase, FileText, GitBranch, Link2, Mail, MapPin, Pencil, ShieldCheck } from 'lucide-react';
+import { API_BASE_URL, readJson } from '../api/client';
 
 // Define the shape of your database profile based on your schema
 interface UserProfile {
@@ -30,15 +31,13 @@ export function ProfilePage() {
         const token = localStorage.getItem('rolematch_token');
         if (!token) throw new Error('No authentication token found.');
 
-        const response = await fetch('http://localhost:5000/api/profile', {
+        const response = await fetch(`${API_BASE_URL}/api/profile`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
-        if (!response.ok) throw new Error('Failed to load profile data.');
-
-        const data = await response.json();
+        const data = await readJson<UserProfile>(response);
         setProfile(data);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Unable to load profile.');
@@ -73,7 +72,7 @@ export function ProfilePage() {
               {/* NEW: Conditionally render a link to the resume or a disabled button */}
               {profile.resumeUrl ? (
                   <a
-                      href={`http://localhost:5000${profile.resumeUrl}`}
+                      href={`${API_BASE_URL}${profile.resumeUrl}`}
                       target="_blank"
                       rel="noreferrer"
                       className="button secondary"
@@ -153,7 +152,7 @@ export function ProfilePage() {
                       <span style={{color: '#667085', fontSize: '0.85rem'}}>Uploaded during onboarding</span>
                     </div>
                     <a
-                        href={`http://localhost:5000${profile.resumeUrl}`}
+                        href={`${API_BASE_URL}${profile.resumeUrl}`}
                         target="_blank"
                         rel="noreferrer"
                         style={{color: '#2563eb', display: 'flex', alignItems: 'center'}}
